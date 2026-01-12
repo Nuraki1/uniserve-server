@@ -52,7 +52,7 @@ jobs:
           port: ${{ secrets.CPANEL_FTP_PORT }}
           username: ${{ secrets.CPANEL_FTP_USERNAME }}
           password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          server-dir: /home/etcodewq/uniserveapi.etcodex.com/
+          server-dir: ${{ secrets.DEPLOY_DIR}}
           local-dir: server-deploy/
           dangerous-clean-slate: true
 
