@@ -52,8 +52,13 @@ jobs:
           port: ${{ secrets.CPANEL_FTP_PORT }}
           username: ${{ secrets.CPANEL_FTP_USERNAME }}
           password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          server-dir: ${{ secrets.DEPLOY_DIR}}
+          server-dir: ${{ secrets.DEPLOY_DIR }}
           local-dir: server-deploy/
           dangerous-clean-slate: true
+          # Keep runtime secrets and server-installed deps if present
+          exclude: |
+            **/.env
+            **/.env.*
+            **/node_modules/**
 
 
