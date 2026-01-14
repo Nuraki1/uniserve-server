@@ -1,9 +1,12 @@
 // In production (cPanel/Passenger), environment variables should be provided by the hosting panel.
 // For local dev, we optionally load `.env` via dotenv if it's installed.
 if (process.env.NODE_ENV !== "production") {
-  await import("dotenv/config").catch(() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require("dotenv").config();
+  } catch {
     // dotenv is optional in non-production
-  });
+  }
 }
 import http from "http";
 import express from "express";
