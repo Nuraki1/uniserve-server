@@ -60,5 +60,13 @@ jobs:
             **/.env
             **/.env.*
             **/node_modules/**
+            # cPanel/LiteSpeed Node.js App (Passenger) wiring + runtime dirs/logs.
+            # If these get deleted, LiteSpeed will serve 404/503 and requests won't reach Express.
+            **/.htaccess
+            **/tmp/**
+            **/public/**
+            **/stderr.log
+            **/logs/**
+            **/.ftp-deploy-sync-state.json
 
 
