@@ -23,20 +23,40 @@ import { createTablesRouter } from "./routes/tables";
 import { createPermissionsRouter } from "./routes/permissions";
 import { createCommonCommentsRouter } from "./routes/common-comments";
 
+function computeAllowedOrigins(clientOrigin: string | undefined): true | string[] {
+  if (!clientOrigin?.trim()) return true;
+  const parts = clientOrigin
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  return parts.length ? parts : true;
+}
+
 const app = express();
 app.use(helmet());
 app.use(express.json({ limit: "2mb" }));
+const allowedOrigins = computeAllowedOrigins(env.CLIENT_ORIGIN);
 app.use(
   cors({
-    origin: env.CLIENT_ORIGIN ?? true,
+    origin: (origin, cb) => {
+      // Allow non-browser clients (curl/postman) that don't send Origin
+      if (!origin) return cb(null, true);
+      if (allowedOrigins === true) return cb(null, true);
+      return cb(null, allowedOrigins.includes(origin));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204,
+    maxAge: 86400,
   })
 );
+app.options("*", cors());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
-const io = attachRealtime(server, { corsOrigin: env.CLIENT_ORIGIN });
+const io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
 app.use("/api/auth", createAuthRouter());
 app.use("/api/admin", createAdminRouter());
