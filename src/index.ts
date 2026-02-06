@@ -1,12 +1,20 @@
-// In production (cPanel/Passenger), environment variables should be provided by the hosting panel.
-// For local dev, we optionally load `.env` via dotenv if it's installed.
-if (process.env.NODE_ENV !== "production") {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require("dotenv").config();
-  } catch {
-    // dotenv is optional in non-production
+// Environment variables:
+// - In production (cPanel/Passenger), env vars should be provided by the hosting panel.
+// - In local dev, we load `server/.env` via dotenv.
+//
+// NOTE: Some Windows shells/CI setups set NODE_ENV=production even for local commands.
+// If NODE_ENV is production but required vars are missing, we still try to load `.env`
+// (dotenv does NOT override existing env vars by default, so this is safe).
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const dotenv = require("dotenv");
+  const missingRequired =
+    !process.env.DATABASE_URL?.trim() || !process.env.JWT_SECRET?.trim();
+  if (process.env.NODE_ENV !== "production" || missingRequired) {
+    dotenv.config();
   }
+} catch {
+  // dotenv is optional; env.ts will validate and print a clear error if vars are missing.
 }
 import http from "http";
 import express from "express";

@@ -84,6 +84,7 @@ export function createAuthRouter() {
           role: user.role,
           branchId: user.branchId,
           avatarUrl: user.avatarUrl,
+          kitchenAllowedCategories: user.kitchenAllowedCategories,
           createdAt: user.createdAt,
         },
       },
@@ -103,6 +104,7 @@ export function createAuthRouter() {
         role: user.role,
         branchId: user.branchId,
         avatarUrl: user.avatarUrl,
+        kitchenAllowedCategories: user.kitchenAllowedCategories,
         createdAt: user.createdAt,
       },
     });

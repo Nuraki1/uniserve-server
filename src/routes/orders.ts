@@ -83,7 +83,7 @@ export function createOrdersRouter(io: SocketIOServer) {
     }
 
     const subtotal = parsed.data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.1;
+    const tax = 0;
     const discount = 0;
     const total = subtotal + tax - discount;
 
@@ -149,6 +149,53 @@ export function createOrdersRouter(io: SocketIOServer) {
     }
   });
 
+  // Waiter can remove an order ONLY while it's still pending (before kitchen starts preparing).
+  router.delete("/:id", async (req, res) => {
+    const orderId = req.params.id;
+    const authed = req.user!;
+
+    if (authed.role !== "admin" && authed.role !== "waiter") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const existing = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!existing) return res.status(404).json({ success: false, error: "Order not found" });
+
+    // Non-admins are always restricted to their branch orders.
+    if (authed.role !== "admin") {
+      const myBranch = authed.branchId ?? null;
+      const orderBranch = existing.branchId ?? null;
+      if (!myBranch || myBranch !== orderBranch) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+    }
+
+    // Only pending orders can be removed.
+    if (existing.status !== "pending") {
+      return res.status(409).json({
+        success: false,
+        error: "Only pending orders can be removed",
+      });
+    }
+
+    // Waiters can only remove their own orders.
+    if (authed.role === "waiter") {
+      const matchesById = existing.waiterUserId ? String(existing.waiterUserId) === String(authed.id) : false;
+      const matchesByName = existing.waiter ? String(existing.waiter).trim() === String(authed.name).trim() : false;
+      if (!matchesById && !matchesByName) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+    }
+
+    await prisma.order.delete({ where: { id: orderId } });
+
+    const payload = { id: orderId, branchId: existing.branchId ?? null };
+    if (existing.branchId) io.to(`branch:${existing.branchId}`).emit("order:deleted", payload);
+    io.emit("order:deleted", payload);
+
+    return res.json({ success: true, data: payload });
+  });
+
   router.post("/:id/payment", async (req, res) => {
     const orderId = req.params.id;
     const parsed = completePaymentSchema.safeParse(req.body);
@@ -159,13 +206,14 @@ export function createOrdersRouter(io: SocketIOServer) {
       if (!existing) return res.status(404).json({ success: false, error: "Order not found" });
 
       const discount = parsed.data.discount ?? 0;
-      const total = existing.subtotal + existing.tax - discount;
+      const total = existing.subtotal - discount;
 
       const order = await prisma.order.update({
         where: { id: orderId },
         data: {
           paymentMethod: parsed.data.paymentMethod,
           bankType: parsed.data.bankType,
+          tax: 0,
           discount,
           total,
           status: "paid",
