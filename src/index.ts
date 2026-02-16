@@ -6,8 +6,8 @@
 // with a different working directory. Instead, try both:
 // - `<appRoot>/.env` (via cwd)
 // - `<appRoot>/.env` (via __dirname, which is `dist/` in production builds)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const dotenv = require("dotenv");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const path = require("path");
@@ -23,7 +23,7 @@
       if (!loaded.error) break;
     }
   }
-  } catch {
+} catch {
   // dotenv is optional; env.ts will validate and print a clear error if vars are missing.
 }
 import http from "http";
@@ -53,89 +53,31 @@ function computeAllowedOrigins(clientOrigin: string | undefined): true | string[
   return parts.length ? parts : true;
 }
 
-function truthy(v: string | undefined): boolean {
-  const s = (v ?? "").trim().toLowerCase();
-  return s === "1" || s === "true" || s === "yes" || s === "on";
-}
-
 const app = express();
 app.use(helmet());
 app.use(express.json({ limit: "2mb" }));
-
-// Keep browser CORS behavior as before:
-// - if CLIENT_ORIGIN is unset/empty => allow all origins
-// - otherwise allow only exact matches from CLIENT_ORIGIN list
 const allowedOrigins = computeAllowedOrigins(env.CLIENT_ORIGIN);
-
-// Kiosk-specific allowances (opt-in via env flags)
-const allowNullOrigin = truthy(env.CORS_ALLOW_NULL_ORIGIN);
-const allowLocalhostOrigins = truthy(env.CORS_ALLOW_LOCALHOST_ORIGINS);
-const allowPrivateNetwork = truthy(env.CORS_ALLOW_PRIVATE_NETWORK);
-
-const isOriginAllowed = (origin: string | undefined): boolean => {
-  // Allow non-browser clients (curl/postman) that don't send Origin
-  if (!origin) return true;
-
-  // Kiosk apps served from `file://` often send Origin: "null"
-  if (origin === "null") return allowNullOrigin;
-
-  // Custom schemes used by embedded webviews (Capacitor/Ionic/Electron-like)
-  if (allowLocalhostOrigins) {
-    if (origin === "capacitor://localhost" || origin === "ionic://localhost" || origin === "app://localhost") {
-      return true;
-    }
-  }
-
-  // Optional localhost http(s) origins for local kiosk shells/dev tools.
-  try {
-    const u = new URL(origin);
-    if (allowLocalhostOrigins) {
-      if (u.protocol === "http:" || u.protocol === "https:") {
-        if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
-      }
-    }
-  } catch {
-    // Non-URL origins: fall through to list check
-  }
-
-  if (allowedOrigins === true) return true;
-  return allowedOrigins.includes(origin);
-};
-
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, cb) => cb(null, isOriginAllowed(origin)),
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "Accept",
-    "Origin",
-    "X-Requested-With",
-  ],
-  optionsSuccessStatus: 204,
-  maxAge: 86400,
-};
-
-// Private Network Access (PNA) support (Chrome). Only enable when explicitly requested.
-app.use((req, res, next) => {
-  const pna = String(req.headers["access-control-request-private-network"] ?? "").toLowerCase();
-  if (pna === "true" && allowPrivateNetwork) {
-    res.setHeader("Access-Control-Allow-Private-Network", "true");
-  }
-  next();
-});
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Allow non-browser clients (curl/postman) that don't send Origin
+      if (!origin) return cb(null, true);
+      if (allowedOrigins === true) return cb(null, true);
+      return cb(null, allowedOrigins.includes(origin));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204,
+    maxAge: 86400,
+  })
+);
+app.options("*", cors());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
-// Socket.IO uses the same origin allow-list rules as HTTP.
-const io = attachRealtime(server, {
-  corsOrigin: (origin, cb) => cb(null, isOriginAllowed(origin)),
-});
+const io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
 app.use("/api/auth", createAuthRouter());
 app.use("/api/admin", createAdminRouter());
