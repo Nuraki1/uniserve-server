@@ -4,6 +4,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(4000),
   CLIENT_ORIGIN: z.string().optional(),
+  // Kiosk / embedded webview compatibility flags (all optional)
+  // - Some kiosk apps run from `file://` which sends `Origin: null`
+  // - Some run from custom schemes like `capacitor://localhost` / `ionic://localhost`
+  // - Some deployments call a LAN server (e.g. http://192.168.x.x) from a secure origin which triggers
+  //   Chrome Private Network Access (PNA) preflight requiring `Access-Control-Allow-Private-Network: true`
+  CORS_ALLOW_NULL_ORIGIN: z.string().optional(), // "1" | "true"
+  CORS_ALLOW_LOCALHOST_ORIGINS: z.string().optional(), // "1" | "true"
+  CORS_ALLOW_PRIVATE_NETWORK: z.string().optional(), // "1" | "true"
   JWT_SECRET: z.string().min(16),
   BOOTSTRAP_TOKEN: z.string().optional(),
 });

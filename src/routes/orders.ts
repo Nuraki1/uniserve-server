@@ -149,12 +149,12 @@ export function createOrdersRouter(io: SocketIOServer) {
     }
   });
 
-  // Waiter can remove an order ONLY while it's still pending (before kitchen starts preparing).
+  // Waiter/Kitchen can remove an order ONLY while it's still pending (before kitchen starts preparing).
   router.delete("/:id", async (req, res) => {
     const orderId = req.params.id;
     const authed = req.user!;
 
-    if (authed.role !== "admin" && authed.role !== "waiter") {
+    if (authed.role !== "admin" && authed.role !== "waiter" && authed.role !== "kitchen") {
       return res.status(403).json({ success: false, error: "Forbidden" });
     }
 
@@ -165,7 +165,9 @@ export function createOrdersRouter(io: SocketIOServer) {
     if (authed.role !== "admin") {
       const myBranch = authed.branchId ?? null;
       const orderBranch = existing.branchId ?? null;
-      if (!myBranch || myBranch !== orderBranch) {
+      // Allow single-branch setups where both user.branchId and order.branchId are null.
+      // Otherwise enforce an exact match.
+      if (myBranch !== orderBranch) {
         return res.status(403).json({ success: false, error: "Forbidden" });
       }
     }

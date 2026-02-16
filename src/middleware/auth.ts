@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../env";
+import { prisma } from "../prisma";
 
 export type AuthedUser = {
   id: string;
@@ -25,8 +26,31 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as AuthedUser;
-    req.user = decoded;
-    return next();
+
+    // IMPORTANT: do not rely solely on JWT payload for branch authorization.
+    // Tokens can become stale if an admin assigns/moves a user to a branch after login.
+    // Fetch the latest user record so branchId/role are always correct.
+    void (async () => {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: { id: true, role: true, branchId: true, email: true, name: true },
+        });
+        if (!dbUser) return res.status(401).json({ success: false, error: "Invalid or expired token" });
+
+        req.user = {
+          id: dbUser.id,
+          role: dbUser.role as AuthedUser["role"],
+          branchId: dbUser.branchId,
+          email: dbUser.email,
+          name: dbUser.name,
+        };
+        return next();
+      } catch {
+        return res.status(401).json({ success: false, error: "Invalid or expired token" });
+      }
+    })();
+    return;
   } catch {
     return res.status(401).json({ success: false, error: "Invalid or expired token" });
   }
