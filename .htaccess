@@ -1,0 +1,39 @@
+###############################################################################
+# Apache .htaccess for the Express API server (cPanel / Apache Passenger)
+#
+# Put this in the DOCUMENT ROOT of your API domain/subdomain
+# (example: uniserveapi.etcodex.com).
+#
+# This is for the backend API, NOT the SPA client. Do NOT rewrite to index.html.
+###############################################################################
+
+<IfModule mod_passenger.c>
+  PassengerEnabled on
+  PassengerAppType node
+
+  # Start the compiled server entry
+  PassengerStartupFile dist/index.js
+
+  # If cPanel "Setup Node.js App" is used, it often sets these automatically.
+  # If NOT, uncomment and set correct absolute paths:
+  #
+  # PassengerAppRoot /home/<cpanel-user>/path/to/uniserve-server/server
+  # PassengerNodejs /home/<cpanel-user>/nodevenv/<appname>/<nodever>/bin/node
+  #
+  #PassengerAppRoot /ABSOLUTE/PATH/TO/uniserve-server/server
+  #PassengerNodejs /ABSOLUTE/PATH/TO/node
+
+  PassengerEnvVar NODE_ENV production
+</IfModule>
+
+# Basic hardening
+Options -Indexes
+Options -MultiViews
+
+###############################################################################
+# Quick verification after deployment:
+# - https://uniserveapi.etcodex.com/health        -> 200 { ok: true }
+# - https://uniserveapi.etcodex.com/api/branches  -> 200/401 (but NOT Apache 404)
+###############################################################################
+
+
