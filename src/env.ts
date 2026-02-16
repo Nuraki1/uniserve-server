@@ -4,6 +4,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(4000),
   CLIENT_ORIGIN: z.string().optional(),
+  // Kiosk / embedded webview compatibility flags (optional)
+  CORS_ALLOW_NULL_ORIGIN: z.string().optional(), // allow `Origin: null` (file:// kiosk shells)
+  CORS_ALLOW_LOCALHOST_ORIGINS: z.string().optional(), // allow capacitor://localhost, ionic://localhost, app://localhost, http(s)://localhost
+  CORS_ALLOW_PRIVATE_NETWORK: z.string().optional(), // enable PNA response header when requested
   JWT_SECRET: z.string().min(16),
   BOOTSTRAP_TOKEN: z.string().optional(),
 });
