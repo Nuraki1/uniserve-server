@@ -1,10 +1,7 @@
 import type { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 
-export function attachRealtime(
-  server: HttpServer,
-  opts?: { corsOrigin?: true | string[] | ((origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => void) }
-) {
+export function attachRealtime(server: HttpServer, opts?: { corsOrigin?: true | string[] }) {
   const io = new Server(server, {
     cors: {
       origin: opts?.corsOrigin ?? true,
