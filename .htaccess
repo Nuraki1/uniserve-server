@@ -4,16 +4,18 @@
 
   # App root must match your cPanel "Application root" directory
   PassengerAppRoot /home/etcodewq/uniserveapi.etcodex.com
+  PassengerBaseURI /
   PassengerStartupFile dist/index.js
   PassengerNodejs /home/etcodewq/nodevenv/uniserveapi.etcodex.com/20/bin/node
 
+  # Some shared hosting environments need extra startup time for Node + Prisma.
+  PassengerStartTimeout 120
   PassengerEnvVar NODE_ENV production
   # Comma-separated allowed frontend origins
   PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com,https://www.uniserve.etcodex.com"
 </IfModule>
 
 Options -Indexes -MultiViews
-
 # Serve static assets (like images) efficiently if they exist in the document root.
 # Note: API CORS is handled in Node/Express. Do NOT add CORS headers here.
 <IfModule mod_headers.c>
