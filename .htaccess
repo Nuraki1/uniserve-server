@@ -1,68 +1,14 @@
-###############################################################################
-# Apache .htaccess for the Express API server (cPanel / Apache Passenger)
-#
-# Put this in the DOCUMENT ROOT of your API domain/subdomain
-# (uniserveapi.etcodex.com)
-#
-# This is for the backend API, NOT the SPA client. Do NOT rewrite to index.html.
-###############################################################################
-
 <IfModule mod_passenger.c>
   PassengerEnabled on
   PassengerAppType node
 
-  # Start the compiled server entry
-  PassengerStartupFile dist/index.js
-
-  # Set the absolute path to your application root
   PassengerAppRoot /home/etcodewx/uniserveapi.etcodex.com
-  
-  # Set the Node.js binary path (using the v20.20.0 environment from cPanel)
+  PassengerStartupFile dist/index.js
   PassengerNodejs /home/etcodewx/nodevenv/uniserveapi.etcodex.com/20/bin/node
 
-  # Set environment variables
   PassengerEnvVar NODE_ENV production
-  
-  # If you need to set your client origin for CORS
-  PassengerEnvVar CLIENT_ORIGIN https://uniserve.etcodex.com
-  
-  # Optional: Increase passenger buffer size if dealing with large requests
-  # PassengerBufferResponse on
-  # PassengerMaxRequestSize 10485760  # 10MB
+  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com"
 </IfModule>
 
-# Basic hardening
 Options -Indexes
 Options -MultiViews
-
-# Handle routing for SPA-like API routes (but don't rewrite to index.html)
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  
-  # If the request is for a real file or directory, serve it directly
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-  
-  # For API routes, let Passenger/Node handle them
-  # This ensures /api/* routes go to your Express app
-  RewriteRule ^ - [L]
-</IfModule>
-
-# Security headers (optional but recommended)
-<IfModule mod_headers.c>
-  Header set X-Content-Type-Options "nosniff"
-  Header set X-Frame-Options "DENY"
-  Header set X-XSS-Protection "1; mode=block"
-</IfModule>
-
-# Deny access to hidden files
-<FilesMatch "^\.">
-  Require all denied
-</FilesMatch>
-
-###############################################################################
-# Quick verification after deployment:
-# - https://uniserveapi.etcodex.com/health        -> 200 { ok: true }
-# - https://uniserveapi.etcodex.com/api/branches  -> 200/401 (but NOT Apache 404)
-###############################################################################

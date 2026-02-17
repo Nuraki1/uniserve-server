@@ -95,7 +95,3 @@ server.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server listening on :${env.PORT}`);
 });
-
-
-
-
