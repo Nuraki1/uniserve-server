@@ -8,21 +8,34 @@ function copyFile(src, dst) {
 
 function main() {
   const root = path.resolve(__dirname, "..");
-  const src = path.join(root, ".htaccess");
   const distDir = path.join(root, "dist");
-  const dst = path.join(distDir, ".htaccess");
 
-  if (!fs.existsSync(src)) {
-    console.warn(`[copy-htaccess] Missing ${src} (skipping)`);
-    return;
-  }
   if (!fs.existsSync(distDir)) {
     console.warn(`[copy-htaccess] Missing ${distDir} (skipping)`);
     return;
   }
 
-  copyFile(src, dst);
-  console.log(`[copy-htaccess] Copied ${src} -> ${dst}`);
+  const jobs = [
+    {
+      src: path.join(root, ".htaccess"),
+      dst: path.join(distDir, ".htaccess"),
+    },
+    // cPanel Node apps often use a `public/` document root.
+    // Copy the `public/.htaccess` too so "deploy dist-only" still works.
+    {
+      src: path.join(root, "public", ".htaccess"),
+      dst: path.join(distDir, "public", ".htaccess"),
+    },
+  ];
+
+  for (const j of jobs) {
+    if (!fs.existsSync(j.src)) {
+      console.warn(`[copy-htaccess] Missing ${j.src} (skipping)`);
+      continue;
+    }
+    copyFile(j.src, j.dst);
+    console.log(`[copy-htaccess] Copied ${j.src} -> ${j.dst}`);
+  }
 }
 
 main();
