@@ -17,8 +17,24 @@
 
 Options -Indexes -MultiViews
 # Serve static assets (like images) efficiently if they exist in the document root.
-# Note: API CORS is handled in Node/Express. Do NOT add CORS headers here.
+# Note: Primary API CORS is handled in Node/Express.
+# However, when Passenger/LiteSpeed returns an HTML 503/404 before Node runs, browsers surface it as a CORS error
+# because the error page has no CORS headers. These headers make error responses readable by the browser.
+<IfModule mod_setenvif.c>
+  # Only allow your known frontend origins (no wildcard when credentials are used).
+  SetEnvIfNoCase Origin "^https://uniserve\.etcodex\.com$" ACAO=$0
+  SetEnvIfNoCase Origin "^https://www\.uniserve\.etcodex\.com$" ACAO=$0
+</IfModule>
 <IfModule mod_headers.c>
+  # Apply even on error responses (503/404) so the browser can read the real status.
+  Header always set Access-Control-Allow-Origin "%{ACAO}e" env=ACAO
+  Header always set Access-Control-Allow-Credentials "true" env=ACAO
+  Header always set Vary "Origin" env=ACAO
+
+  # Preflight helpers (safe defaults; Express will still handle real CORS when Node is running)
+  Header always set Access-Control-Allow-Methods "GET,POST,PUT,PATCH,DELETE,OPTIONS" env=ACAO
+  Header always set Access-Control-Allow-Headers "Authorization,Content-Type" env=ACAO
+
   <FilesMatch "\.(?:png|jpe?g|gif|webp|svg|ico)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
