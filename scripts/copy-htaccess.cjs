@@ -16,16 +16,8 @@ function main() {
   }
 
   const jobs = [
-    {
-      src: path.join(root, ".htaccess"),
-      dst: path.join(distDir, ".htaccess"),
-    },
-    // cPanel Node apps often use a `public/` document root.
-    // Copy the `public/.htaccess` too so "deploy dist-only" still works.
-    {
-      src: path.join(root, "public", ".htaccess"),
-      dst: path.join(distDir, "public", ".htaccess"),
-    },
+    // Single canonical .htaccess (place this in your cPanel document root)
+    { src: path.join(root, ".htaccess"), dst: path.join(distDir, ".htaccess") },
   ];
 
   for (const j of jobs) {
