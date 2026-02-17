@@ -2,12 +2,14 @@
   PassengerEnabled on
   PassengerAppType node
 
-  PassengerAppRoot /home/etcodewx/uniserveapi.etcodex.com
+  # App root must match your cPanel "Application root" directory
+  PassengerAppRoot /home/etcodewq/uniserveapi.etcodex.com
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/etcodewx/nodevenv/uniserveapi.etcodex.com/20/bin/node
+  PassengerNodejs /home/etcodewq/nodevenv/uniserveapi.etcodex.com/20/bin/node
 
   PassengerEnvVar NODE_ENV production
-  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com"
+  # Comma-separated allowed frontend origins
+  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com,https://www.uniserve.etcodex.com"
 </IfModule>
 
 Options -Indexes -MultiViews

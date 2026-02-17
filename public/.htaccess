@@ -5,13 +5,13 @@
   # IMPORTANT:
   # This .htaccess is meant to live in the *document root* (often `public/` for cPanel node apps).
   # It points Passenger to the real app root and startup file.
-  PassengerAppRoot /home/etcodewx/uniserveapi.etcodex.com
+  PassengerAppRoot /home/etcodewq/uniserveapi.etcodex.com
   PassengerBaseURI /
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/etcodewx/nodevenv/uniserveapi.etcodex.com/20/bin/node
+  PassengerNodejs /home/etcodewq/nodevenv/uniserveapi.etcodex.com/20/bin/node
 
   PassengerEnvVar NODE_ENV production
-  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com"
+  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com,https://www.uniserve.etcodex.com"
 </IfModule>
 
 Options -Indexes -MultiViews

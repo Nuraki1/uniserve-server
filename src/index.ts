@@ -32,7 +32,7 @@ import cors from "cors";
 import helmet from "helmet";
 import fs from "fs";
 import path from "path";
-import { env } from "./env";
+import { env, envStatus } from "./env";
 import { attachRealtime } from "./realtime";
 import { createOrdersRouter } from "./routes/orders";
 import { createAuthRouter } from "./routes/auth";
@@ -152,24 +152,46 @@ for (const c of staticCandidates) {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/", (_req, res) => res.json({ ok: true, service: "uniserve-api" }));
+app.get("/__env", (_req, res) => {
+  // Intentionally do not leak secrets; this is just to confirm the process is running and env is set.
+  return res.json({
+    ok: true,
+    envOk: envStatus.ok,
+    missing: envStatus.missing,
+    nodeEnv: process.env.NODE_ENV,
+  });
+});
 
 const server = http.createServer(app);
-const io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
-app.use("/api/auth", createAuthRouter());
-app.use("/api/admin", createAdminRouter());
-app.use("/api/public", createPublicRouter());
-app.use("/api/users", createUsersRouter());
-app.use("/api/orders", createOrdersRouter(io));
-app.use("/api/menu-items", createMenuItemsRouter());
-app.use("/api/branches", createBranchesRouter());
-app.use("/api/customers", createCustomersRouter());
-app.use("/api/tables", createTablesRouter());
-app.use("/api/permissions", createPermissionsRouter());
-app.use("/api/common-comments", createCommonCommentsRouter());
+// If required env isn't configured, keep the process alive (avoid Passenger 503 due to crash)
+// and return JSON 503s for API routes with a clear message about what's missing.
+if (!envStatus.ok) {
+  app.use("/api", (_req, res) =>
+    res.status(503).json({
+      success: false,
+      error: "Server is not configured yet",
+      missing: envStatus.missing,
+    })
+  );
+} else {
+  const io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
-// JSON 404s (keeps clients from seeing HTML error pages/proxies).
-app.use("/api", (_req, res) => res.status(404).json({ success: false, error: "Not found" }));
+  app.use("/api/auth", createAuthRouter());
+  app.use("/api/admin", createAdminRouter());
+  app.use("/api/public", createPublicRouter());
+  app.use("/api/users", createUsersRouter());
+  app.use("/api/orders", createOrdersRouter(io));
+  app.use("/api/menu-items", createMenuItemsRouter());
+  app.use("/api/branches", createBranchesRouter());
+  app.use("/api/customers", createCustomersRouter());
+  app.use("/api/tables", createTablesRouter());
+  app.use("/api/permissions", createPermissionsRouter());
+  app.use("/api/common-comments", createCommonCommentsRouter());
+
+  // JSON 404s (keeps clients from seeing HTML error pages/proxies).
+  app.use("/api", (_req, res) => res.status(404).json({ success: false, error: "Not found" }));
+}
 
 server.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
