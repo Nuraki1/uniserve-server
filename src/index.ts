@@ -70,35 +70,10 @@ function computeAllowedOrigins(clientOrigin: string | undefined): true | string[
   return parts.length ? parts.map(normalizeOrigin) : true;
 }
 
-function isLocalhostLikeOrigin(origin: string): boolean {
-  // Support common hybrid-app shells and local dev origins.
-  // Examples: capacitor://localhost, ionic://localhost, app://localhost, http://localhost:5173
-  try {
-    const u = new URL(origin);
-    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
-    if (["capacitor:", "ionic:", "app:"].includes(u.protocol) && u.hostname === "localhost") return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 const app = express();
 app.use(helmet());
 app.use(express.json({ limit: "2mb" }));
 const allowedOrigins = computeAllowedOrigins(env.CLIENT_ORIGIN);
-
-// Private Network Access (PNA) preflight support (optional).
-// Chrome may send `Access-Control-Request-Private-Network: true` when calling a local/private IP.
-app.use((req, res, next) => {
-  if (
-    env.CORS_ALLOW_PRIVATE_NETWORK?.trim() &&
-    req.headers["access-control-request-private-network"] === "true"
-  ) {
-    res.setHeader("Access-Control-Allow-Private-Network", "true");
-  }
-  next();
-});
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, cb) => {
@@ -106,12 +81,6 @@ const corsOptions: cors.CorsOptions = {
     if (!origin) return cb(null, true);
 
     const normalized = normalizeOrigin(origin);
-
-    // Kiosk shells / file:// webviews sometimes send `Origin: null`
-    if (normalized === "null" && env.CORS_ALLOW_NULL_ORIGIN?.trim()) return cb(null, true);
-
-    // Optional: allow common localhost-like origins for mobile/hybrid shells or dev
-    if (env.CORS_ALLOW_LOCALHOST_ORIGINS?.trim() && isLocalhostLikeOrigin(normalized)) return cb(null, true);
 
     if (allowedOrigins === true) return cb(null, true);
     return cb(null, allowedOrigins.includes(normalized));
