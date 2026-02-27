@@ -12,6 +12,8 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const path = require("path");
 
+  // process
+
   const missingRequired = !process.env.DATABASE_URL?.trim() || !process.env.JWT_SECRET?.trim();
   if (process.env.NODE_ENV !== "production" || missingRequired) {
     const candidates = [
