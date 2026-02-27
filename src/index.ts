@@ -133,7 +133,20 @@ app.get("/__env", (_req, res) => {
   });
 });
 
-const server = http.createServer(app);
+// Passenger/cPanel compatibility: Passenger manages the HTTP server.
+// Check if we're running under Passenger (multiple detection methods for reliability)
+const isPassenger = !!(
+  process.env.PASSENGER_APP_ENV ||
+  process.env.PASSENGER_SOCKET_FILE ||
+  process.env.PHUSION_PASSENGER_VERSION ||
+  (process.env.NODE_ENV === "production" && !process.env.PORT) // In production without explicit PORT, likely Passenger
+);
+
+let server: http.Server;
+let io: ReturnType<typeof attachRealtime> | undefined;
+
+// Create HTTP server for Socket.IO support
+server = http.createServer(app);
 
 // If required env isn't configured, keep the process alive (avoid Passenger 503 due to crash)
 // and return JSON 503s for API routes with a clear message about what's missing.
@@ -146,25 +159,49 @@ if (!envStatus.ok) {
     })
   );
 } else {
-  const io = attachRealtime(server, { corsOrigin: allowedOrigins });
+  try {
+    io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
-  app.use("/api/auth", createAuthRouter());
-  app.use("/api/admin", createAdminRouter());
-  app.use("/api/public", createPublicRouter());
-  app.use("/api/users", createUsersRouter());
-  app.use("/api/orders", createOrdersRouter(io));
-  app.use("/api/menu-items", createMenuItemsRouter());
-  app.use("/api/branches", createBranchesRouter());
-  app.use("/api/customers", createCustomersRouter());
-  app.use("/api/tables", createTablesRouter());
-  app.use("/api/permissions", createPermissionsRouter());
-  app.use("/api/common-comments", createCommonCommentsRouter());
+    app.use("/api/auth", createAuthRouter());
+    app.use("/api/admin", createAdminRouter());
+    app.use("/api/public", createPublicRouter());
+    app.use("/api/users", createUsersRouter());
+    app.use("/api/orders", createOrdersRouter(io));
+    app.use("/api/menu-items", createMenuItemsRouter());
+    app.use("/api/branches", createBranchesRouter());
+    app.use("/api/customers", createCustomersRouter());
+    app.use("/api/tables", createTablesRouter());
+    app.use("/api/permissions", createPermissionsRouter());
+    app.use("/api/common-comments", createCommonCommentsRouter());
 
-  // JSON 404s (keeps clients from seeing HTML error pages/proxies).
-  app.use("/api", (_req, res) => res.status(404).json({ success: false, error: "Not found" }));
+    // JSON 404s (keeps clients from seeing HTML error pages/proxies).
+    app.use("/api", (_req, res) => res.status(404).json({ success: false, error: "Not found" }));
+  } catch (error) {
+    // If route setup fails, at least the health endpoint should still work
+    // eslint-disable-next-line no-console
+    console.error("Error setting up API routes:", error);
+    app.use("/api", (_req, res) =>
+      res.status(503).json({
+        success: false,
+        error: "Server initialization error",
+      })
+    );
+  }
 }
 
-server.listen(env.PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Server listening on :${env.PORT}`);
-});
+// For Passenger: export the app (Passenger will handle the server and call app(req, res))
+// For standalone: listen on the port
+// In production, always export for Passenger (it's the only deployment method)
+// In development, use server.listen() for standalone mode
+if (isPassenger || process.env.NODE_ENV === "production") {
+  // Passenger mode: export the app directly
+  // Passenger will manage the HTTP server and call the app with (req, res)
+  // Socket.IO server is created but Passenger will route HTTP requests through the Express app
+  module.exports = app;
+} else {
+  // Standalone/development mode: start listening on the port
+  server.listen(env.PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Server listening on :${env.PORT}`);
+  });
+}
