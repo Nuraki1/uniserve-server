@@ -2,17 +2,18 @@
   PassengerEnabled on
   PassengerAppType node
 
-  # App root must match your cPanel "Application root" directory
-  PassengerAppRoot /home/etcodewq/uniserveapi.etcodex.com
+  # App root must match your cPanel "Application root" for uniserveapi.nicecafe.net
+  # Update the /home/USERNAME part to match your cPanel username
+  PassengerAppRoot /home/nicecafe/uniserveapi.nicecafe.net
   PassengerBaseURI /
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/etcodewq/nodevenv/uniserveapi.etcodex.com/20/bin/node
+  PassengerNodejs /home/nicecafe/nodevenv/uniserveapi.nicecafe.net/20/bin/node
 
   # Some shared hosting environments need extra startup time for Node + Prisma.
   PassengerStartTimeout 120
   PassengerEnvVar NODE_ENV production
   # Comma-separated allowed frontend origins
-  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.etcodex.com,https://www.uniserve.etcodex.com"
+  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.nicecafe.net,https://www.uniserve.nicecafe.net"
 </IfModule>
 
 Options -Indexes -MultiViews
@@ -22,8 +23,8 @@ Options -Indexes -MultiViews
 # because the error page has no CORS headers. These headers make error responses readable by the browser.
 <IfModule mod_setenvif.c>
   # Only allow your known frontend origins (no wildcard when credentials are used).
-  SetEnvIfNoCase Origin "^https://uniserve\.etcodex\.com$" ACAO=$0
-  SetEnvIfNoCase Origin "^https://www\.uniserve\.etcodex\.com$" ACAO=$0
+  SetEnvIfNoCase Origin "^https://uniserve\.nicecafe\.net$" ACAO=$0
+  SetEnvIfNoCase Origin "^https://www\.uniserve\.nicecafe\.net$" ACAO=$0
 </IfModule>
 <IfModule mod_headers.c>
   # Apply even on error responses (503/404) so the browser can read the real status.
