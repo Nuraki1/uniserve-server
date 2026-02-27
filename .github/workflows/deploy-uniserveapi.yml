@@ -39,6 +39,7 @@ jobs:
           mkdir -p server-deploy
           cp -R dist server-deploy/dist
           cp -R prisma server-deploy/prisma
+          cp -R scripts server-deploy/scripts
           cp package.json server-deploy/package.json
           cp package-lock.json server-deploy/package-lock.json
           cp env.example server-deploy/env.example
