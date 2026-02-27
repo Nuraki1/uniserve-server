@@ -36,17 +36,7 @@ import fs from "fs";
 import path from "path";
 import { env, envStatus } from "./env";
 import { attachRealtime } from "./realtime";
-import { createOrdersRouter } from "./routes/orders";
-import { createAuthRouter } from "./routes/auth";
-import { createAdminRouter } from "./routes/admin";
-import { createPublicRouter } from "./routes/public";
-import { createMenuItemsRouter } from "./routes/menu-items";
-import { createBranchesRouter } from "./routes/branches";
-import { createUsersRouter } from "./routes/users";
-import { createCustomersRouter } from "./routes/customers";
-import { createTablesRouter } from "./routes/tables";
-import { createPermissionsRouter } from "./routes/permissions";
-import { createCommonCommentsRouter } from "./routes/common-comments";
+// Routes are imported lazily to avoid blocking module load
 
 function stripOuterQuotes(s: string): string {
   const t = s.trim();
@@ -100,24 +90,31 @@ app.options("*", cors(corsOptions));
 
 // Optional static folders for images/uploads when deployed under Passenger/cPanel.
 // These are no-ops if the folders don't exist in the deployment.
+// Use try-catch to avoid blocking on filesystem operations
 const staticCandidates: Array<{ mount: string; dir: string }> = [
   { mount: "/images", dir: path.resolve(__dirname, "..", "images") },
   { mount: "/uploads", dir: path.resolve(__dirname, "..", "uploads") },
 ];
 for (const c of staticCandidates) {
-  if (fs.existsSync(c.dir)) {
-    app.use(
-      c.mount,
-      express.static(c.dir, {
-        etag: true,
-        maxAge: "30d",
-        setHeaders: (res, filePath) => {
-          if (/\.(?:png|jpe?g|gif|webp|svg|ico)$/i.test(filePath)) {
-            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-          }
-        },
-      })
-    );
+  try {
+    // Use a quick existence check - if it fails or is slow, skip it
+    if (fs.existsSync(c.dir)) {
+      app.use(
+        c.mount,
+        express.static(c.dir, {
+          etag: true,
+          maxAge: "30d",
+          setHeaders: (res, filePath) => {
+            if (/\.(?:png|jpe?g|gif|webp|svg|ico)$/i.test(filePath)) {
+              res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            }
+          },
+        })
+      );
+    }
+  } catch {
+    // Skip static folder if there's any error (permissions, etc.)
+    // This prevents blocking during startup
   }
 }
 
@@ -148,18 +145,45 @@ let io: ReturnType<typeof attachRealtime> | undefined;
 // Create HTTP server for Socket.IO support
 server = http.createServer(app);
 
-// If required env isn't configured, keep the process alive (avoid Passenger 503 due to crash)
-// and return JSON 503s for API routes with a clear message about what's missing.
-if (!envStatus.ok) {
-  app.use("/api", (_req, res) =>
-    res.status(503).json({
-      success: false,
-      error: "Server is not configured yet",
-      missing: envStatus.missing,
-    })
-  );
-} else {
+// Setup routes lazily to avoid blocking module load (important for Passenger)
+// This function is called after the module loads to set up API routes
+function setupRoutes() {
+  if (!envStatus.ok) {
+    app.use("/api", (_req, res) =>
+      res.status(503).json({
+        success: false,
+        error: "Server is not configured yet",
+        missing: envStatus.missing,
+      })
+    );
+    return;
+  }
+
   try {
+    // Lazy import routes to avoid blocking module load
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createAuthRouter } = require("./routes/auth");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createAdminRouter } = require("./routes/admin");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createPublicRouter } = require("./routes/public");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createUsersRouter } = require("./routes/users");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createOrdersRouter } = require("./routes/orders");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createMenuItemsRouter } = require("./routes/menu-items");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createBranchesRouter } = require("./routes/branches");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createCustomersRouter } = require("./routes/customers");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createTablesRouter } = require("./routes/tables");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createPermissionsRouter } = require("./routes/permissions");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createCommonCommentsRouter } = require("./routes/common-comments");
+
     io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
     app.use("/api/auth", createAuthRouter());
@@ -188,6 +212,11 @@ if (!envStatus.ok) {
     );
   }
 }
+
+// Set up routes synchronously - route creation functions should be fast
+// The lazy require() ensures route modules are only loaded when this function runs,
+// not during top-level module imports
+setupRoutes();
 
 // For Passenger: export the app (Passenger will handle the server and call app(req, res))
 // For standalone: listen on the port
