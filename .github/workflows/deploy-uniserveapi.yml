@@ -1,0 +1,67 @@
+name: Deploy API (uniserveapi.nicecafe.net)
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-uniserveapi
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run prisma:generate
+
+      - name: Build (tsc -> dist)
+        run: npm run build
+
+      - name: Prepare deploy bundle
+        shell: bash
+        run: |
+          rm -rf server-deploy
+          mkdir -p server-deploy
+          cp -R dist server-deploy/dist
+          cp -R prisma server-deploy/prisma
+          cp package.json server-deploy/package.json
+          cp package-lock.json server-deploy/package-lock.json
+          cp env.example server-deploy/env.example
+          cp .htaccess server-deploy/.htaccess
+          cp README.md server-deploy/README.md 2>/dev/null || true
+
+      - name: Deploy via FTP (cPanel - uniserveapi.nicecafe.net)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.CPANEL_FTP_SERVER }}
+          port: ${{ secrets.CPANEL_FTP_PORT }}
+          username: ${{ secrets.CPANEL_FTP_USERNAME }}
+          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
+          server-dir: ${{ secrets.DEPLOY_DIR_API }}
+          local-dir: server-deploy/
+          dangerous-clean-slate: true
+          exclude: |
+            **/.env
+            **/.env.*
+            **/node_modules/**
+            **/tmp/**
+            **/public/**
+            **/stderr.log
+            **/logs/**
+            **/.ftp-deploy-sync-state.json
+
