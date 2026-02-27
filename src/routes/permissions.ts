@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { DEFAULT_PERMISSIONS, ensurePermissionsDefaults } from "../utils/permissions-store";
 
 const roleSchema = z.enum(["Cashier", "Kitchen", "Waiter"]);
 
@@ -17,71 +17,7 @@ const permissionsStateSchema = z.object({
   Waiter: rolePermissionsSchema,
 });
 
-const DEFAULT_PERMISSIONS = {
-  Cashier: {
-    sections: { "new-order": true, status: true, checkout: true, accounts: true, history: true },
-    actions: {
-      "create-order": true,
-      "view-orders": true,
-      "update-order-status": true,
-      "checkout-order": true,
-      "manage-customer-accounts": true,
-      "view-history": true,
-      "view-all-branch-data": true,
-    },
-  },
-  Kitchen: {
-    sections: { orders: true, availability: true, analytics: true },
-    actions: {
-      "view-orders": true,
-      "update-order-status": true,
-      "view-order-details": true,
-      "manage-menu-availability": true,
-      "view-analytics": true,
-      "view-all-branch-data": true,
-    },
-  },
-  Waiter: {
-    sections: { "new-order": true, status: true, history: true },
-    actions: {
-      "create-order": true,
-      "view-orders": true,
-      "view-own-orders": true,
-      "view-history": true,
-      "view-all-branch-data": true,
-    },
-  },
-} as const;
-
-async function ensureDefaults() {
-  let existing: any[] = [];
-  try {
-    existing = await prisma.rolePermissions.findMany();
-  } catch (e: any) {
-    // If DB wasn't migrated yet, Prisma throws P2021 "table does not exist".
-    // Don't crash the server; allow the route to respond with defaults + instructions.
-    if (e?.code === "P2021") {
-      return { ok: false as const, reason: "missing_table" as const };
-    }
-    throw e;
-  }
-  const byRole = new Map(existing.map(r => [r.role, r]));
-
-  const roles: Array<z.infer<typeof roleSchema>> = ["Cashier", "Kitchen", "Waiter"];
-  for (const role of roles) {
-    if (byRole.has(role as any)) continue;
-    const data = (DEFAULT_PERMISSIONS as any)[role];
-    await prisma.rolePermissions.create({
-      data: {
-        role: role as any,
-        sections: data.sections as Prisma.InputJsonValue,
-        actions: data.actions as Prisma.InputJsonValue,
-      },
-    });
-  }
-
-  return { ok: true as const };
-}
+import { prisma } from "../prisma";
 
 export function createPermissionsRouter() {
   const router = Router();
@@ -90,7 +26,7 @@ export function createPermissionsRouter() {
   // Read permissions: admin gets full matrix; other roles get their own role's permissions only.
   router.get("/", async (req, res) => {
     const authed = req.user!;
-    const ensured = await ensureDefaults();
+    const ensured = await ensurePermissionsDefaults();
     if (!ensured.ok) {
       // DB not migrated yet; serve defaults from code so app can still boot.
       if (authed.role === "admin") {
@@ -125,7 +61,7 @@ export function createPermissionsRouter() {
     const parsed = permissionsStateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
 
-    const ensured = await ensureDefaults();
+    const ensured = await ensurePermissionsDefaults();
     if (!ensured.ok) {
       return res.status(503).json({
         success: false,

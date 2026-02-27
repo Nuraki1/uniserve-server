@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { branchWhereForRead } from "../utils/branch-access";
+import { requireAction } from "../middleware/permissions";
 
 const menuItemCreateSchema = z.object({
   name: z.string().min(1),
@@ -30,8 +32,11 @@ export function createMenuItemsRouter() {
 
   router.get("/", async (req, res) => {
     const branchId = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
+    const authed = req.user!;
+    const bw = branchWhereForRead(authed, branchId);
+    if (bw.status) return res.status(bw.status).json({ success: false, error: bw.error });
     const items = await prisma.menuItem.findMany({
-      where: branchId ? { branchId } : undefined,
+      where: bw.where,
       orderBy: [{ category: "asc" }, { name: "asc" }],
       take: 2000,
     });
@@ -89,7 +94,7 @@ export function createMenuItemsRouter() {
   });
 
   // Toggle availability (kitchen + admin)
-  router.patch("/:id/availability", requireRole(["admin", "kitchen"]), async (req, res) => {
+  router.patch("/:id/availability", requireRole(["admin", "kitchen"]), requireAction("manage-menu-availability"), async (req, res) => {
     try {
       const current = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
       if (!current) return res.status(404).json({ success: false, error: "Menu item not found" });

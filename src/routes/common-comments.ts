@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { getBranchScope, canAccessBranch } from "../utils/branch-access";
 
 const createSchema = z.object({
   text: z.string().min(1),
@@ -20,17 +21,23 @@ export function createCommonCommentsRouter() {
     const branchIdQuery = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
     const categoryQuery = typeof req.query.category === "string" ? req.query.category : undefined;
 
-    // Non-admins only see their branch + global comments.
-    const effectiveBranchId = authed.role === "admin" ? branchIdQuery : (authed.branchId ?? branchIdQuery);
+    const requested = branchIdQuery?.trim() || undefined;
+    if (requested && !canAccessBranch(authed, requested)) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const scope = getBranchScope(authed);
 
     try {
       const comments = await prisma.commonComment.findMany({
         where: {
           AND: [
             categoryQuery ? { OR: [{ category: null }, { category: categoryQuery }] } : {},
-            effectiveBranchId
-              ? { OR: [{ branchId: null }, { branchId: effectiveBranchId }] }
-              : {},
+            requested
+              ? { OR: [{ branchId: null }, { branchId: requested }] }
+              : scope.mode === "all"
+                ? {}
+                : { OR: [{ branchId: null }, { branchId: { in: scope.branchIds } }] },
           ],
         },
         orderBy: [{ category: "asc" }, { createdAt: "desc" }],

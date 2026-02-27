@@ -67,6 +67,21 @@ export function createAuthRouter() {
     const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
     if (!ok) return res.status(401).json({ success: false, error: "Invalid credentials" });
 
+    // Compute allowed branches (supports multi-branch access table when migrated).
+    let accessIds: string[] = [];
+    try {
+      const rows = await prisma.userBranchAccess.findMany({
+        where: { userId: user.id },
+        select: { branchId: true },
+      });
+      accessIds = rows.map((r: { branchId: string }) => String(r.branchId));
+    } catch {
+      // ignore if table missing
+      accessIds = [];
+    }
+    const allowedBranchIds =
+      user.role === "admin" ? null : accessIds.length > 0 ? accessIds : user.branchId ? [user.branchId] : null;
+
     const token = jwt.sign(
       { id: user.id, role: user.role, branchId: user.branchId, email: user.email, name: user.name },
       env.JWT_SECRET,
@@ -83,6 +98,7 @@ export function createAuthRouter() {
           name: user.name,
           role: user.role,
           branchId: user.branchId,
+          allowedBranchIds,
           avatarUrl: user.avatarUrl,
           kitchenAllowedCategories: user.kitchenAllowedCategories,
           createdAt: user.createdAt,
@@ -93,6 +109,7 @@ export function createAuthRouter() {
 
   router.get("/me", requireAuth, async (req, res) => {
     const u = req.user!;
+    // Note: req.user already contains latest branch scope; still load user for profile fields.
     const user = await prisma.user.findUnique({ where: { id: u.id } });
     if (!user) return res.status(404).json({ success: false, error: "User not found" });
     return res.json({
@@ -103,6 +120,7 @@ export function createAuthRouter() {
         name: user.name,
         role: user.role,
         branchId: user.branchId,
+        allowedBranchIds: u.allowedBranchIds ?? null,
         avatarUrl: user.avatarUrl,
         kitchenAllowedCategories: user.kitchenAllowedCategories,
         createdAt: user.createdAt,

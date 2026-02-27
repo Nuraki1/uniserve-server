@@ -1,6 +1,6 @@
 # Server environment variables
 
-Set these in `server/.env` (do **not** commit secrets).
+Set these in `nice-server/.env` (do **not** commit secrets).
 
 ## Required
 

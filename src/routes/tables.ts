@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { branchWhereForRead } from "../utils/branch-access";
 
 const tableCreateSchema = z.object({
   number: z.string().min(1),
@@ -19,10 +20,11 @@ export function createTablesRouter() {
   router.get("/", async (req, res) => {
     const branchIdQuery = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
     const authed = req.user!;
-    const effectiveBranchId = authed.role === "admin" ? branchIdQuery : (authed.branchId ?? branchIdQuery);
+    const bw = branchWhereForRead(authed, branchIdQuery);
+    if (bw.status) return res.status(bw.status).json({ success: false, error: bw.error });
 
     const tables = await prisma.table.findMany({
-      where: effectiveBranchId ? { branchId: effectiveBranchId } : undefined,
+      where: bw.where,
       orderBy: [{ section: "asc" }, { number: "asc" }],
       take: 2000,
     });

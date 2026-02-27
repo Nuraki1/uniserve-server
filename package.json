@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json && node scripts/copy-htaccess.cjs",
-    "start": "node dist/index.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
-    "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:push": "prisma db push"
+    "server": "node dist/index.js",
+    "prisma:generate": "node scripts/ensure-env.cjs && prisma generate",
+    "prisma:migrate": "node scripts/ensure-env.cjs && prisma migrate deploy",
+    "prisma:migrate:dev": "node scripts/ensure-env.cjs && prisma migrate dev",
+    "prisma:push": "node scripts/ensure-env.cjs && prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -50,6 +50,11 @@ model User {
   name         String
   role         UserRole
   branchId     String?
+  // Multi-branch access:
+  // - If a user has rows in UserBranchAccess, they can access exactly those branches.
+  // - If they have no rows and branchId is set, they can access only that one branch.
+  // - If they have no rows and branchId is null, they have access to all branches (legacy behavior for admin + optional staff).
+  branchAccesses UserBranchAccess[]
   avatarUrl    String?  @db.LongText
   // For kitchen role: which menu categories this account is responsible for.
   // Stored as JSON array of strings (e.g. ["Pizza","Drinks"]).
@@ -60,6 +65,18 @@ model User {
   @@index([role, branchId])
 }
 
+model UserBranchAccess {
+  userId   String
+  branchId String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+  @@index([branchId])
+}
+
 model Branch {
   // Use a human/stable id (e.g. "furi", "sarbet") to match existing frontend branchId usage.
   id        String   @id
@@ -67,6 +84,8 @@ model Branch {
   location  String?
   phone     String?
   manager   String?
+  userAccesses UserBranchAccess[]
+  customerAccesses CustomerBranchAccess[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -95,6 +114,7 @@ model Customer {
   email       String?
   notes       String?             @db.LongText
   branchId    String?
+  customerAccesses CustomerBranchAccess[]
   accountType CustomerAccountType @default(regular)
   balance     Float               @default(0)
   creditLimit Float?
@@ -103,6 +123,18 @@ model Customer {
   updatedAt   DateTime            @updatedAt
 
   @@index([branchId, createdAt])
+}
+
+model CustomerBranchAccess {
+  customerId String
+  branchId   String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, branchId])
+  @@index([branchId])
 }
 
 model Table {

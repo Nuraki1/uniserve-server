@@ -10,14 +10,28 @@ const createUserSchema = z
     password: z.string().min(6),
     name: z.string().min(1),
     role: z.enum(["admin", "cashier", "kitchen", "waiter"]),
-    branchId: z.string().optional(),
+    branchId: z.string().nullable().optional(),
+    // Optional multi-branch assignment for staff roles (cashier/waiter/kitchen).
+    // If provided, user can access exactly these branches.
+    branchIds: z.array(z.string().min(1)).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role !== "admin" && (!data.branchId || data.branchId.trim().length === 0)) {
+    if (data.role === "admin") return;
+
+    // All non-admin roles: if branchId is provided, it must be a non-empty string.
+    if (data.branchId !== undefined && data.branchId !== null && data.branchId.trim().length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "branchId is required for non-admin users",
+        message: "branchId must be a non-empty string or null",
         path: ["branchId"],
+      });
+    }
+
+    if (data.branchIds && data.branchIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "branchIds must be omitted or contain at least one branch id",
+        path: ["branchIds"],
       });
     }
   });
@@ -25,6 +39,7 @@ const createUserSchema = z
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   branchId: z.string().nullable().optional(),
+  branchIds: z.array(z.string().min(1)).optional(),
   avatarUrl: z.string().nullable().optional(),
 });
 
@@ -45,15 +60,35 @@ export function createAdminRouter() {
     if (exists) return res.status(400).json({ success: false, error: "Email already exists" });
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    const dedupedBranchIds = Array.isArray(parsed.data.branchIds)
+      ? Array.from(new Set(parsed.data.branchIds.map((b) => String(b).trim()).filter(Boolean)))
+      : [];
+
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         name: parsed.data.name,
         role: parsed.data.role,
-        branchId: parsed.data.role === "admin" ? null : (parsed.data.branchId ?? null),
+        branchId:
+          parsed.data.role === "admin"
+            ? null
+            : dedupedBranchIds.length > 0
+              ? dedupedBranchIds[0]
+              : (parsed.data.branchId ?? null),
       },
     });
+
+    if (user.role !== "admin" && dedupedBranchIds.length > 0) {
+      try {
+        await prisma.userBranchAccess.createMany({
+          data: dedupedBranchIds.map((branchId) => ({ userId: user.id, branchId })),
+          skipDuplicates: true,
+        });
+      } catch {
+        // If migrations haven't been applied yet, ignore (legacy mode).
+      }
+    }
 
     return res.status(201).json({
       success: true,
@@ -64,7 +99,16 @@ export function createAdminRouter() {
   router.get("/users", async (_req, res) => {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        branchId: true,
+        createdAt: true,
+        avatarUrl: true,
+        branchAccesses: { select: { branchId: true } },
+      },
     });
     return res.json({ success: true, data: users });
   });
@@ -74,15 +118,40 @@ export function createAdminRouter() {
     if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
 
     try {
+      const dedupedBranchIds = Array.isArray(parsed.data.branchIds)
+        ? Array.from(new Set(parsed.data.branchIds.map((b) => String(b).trim()).filter(Boolean)))
+        : undefined;
+
       const user = await prisma.user.update({
         where: { id: req.params.id },
         data: {
           ...(parsed.data.name ? { name: parsed.data.name } : {}),
-          ...(parsed.data.branchId !== undefined ? { branchId: parsed.data.branchId } : {}),
+          ...(parsed.data.branchId !== undefined && dedupedBranchIds === undefined ? { branchId: parsed.data.branchId } : {}),
           ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl } : {}),
         },
         select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true },
       });
+
+      // Update multi-branch access list if branchIds was provided.
+      if (dedupedBranchIds !== undefined && user.role !== "admin") {
+        try {
+          await prisma.userBranchAccess.deleteMany({ where: { userId: user.id } });
+          if (dedupedBranchIds.length > 0) {
+            await prisma.userBranchAccess.createMany({
+              data: dedupedBranchIds.map((branchId) => ({ userId: user.id, branchId })),
+              skipDuplicates: true,
+            });
+            // Keep legacy branchId in sync for older clients (use first branch as "home")
+            await prisma.user.update({ where: { id: user.id }, data: { branchId: dedupedBranchIds[0] } });
+          } else {
+            // All branches: no access rows, branchId null
+            await prisma.user.update({ where: { id: user.id }, data: { branchId: null } });
+          }
+        } catch {
+          // ignore if table doesn't exist yet
+        }
+      }
+
       return res.json({ success: true, data: user });
     } catch {
       return res.status(404).json({ success: false, error: "User not found" });
