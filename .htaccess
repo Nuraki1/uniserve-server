@@ -2,10 +2,10 @@
   PassengerEnabled on
   PassengerAppType node
   # App root must match your cPanel "Application root" directory
-  PassengerAppRoot /home/nicecafe/uniserveapi.nicecafe.net
+  PassengerAppRoot /home/nicecasf/uniserveapi.nicecafe.net
   PassengerBaseURI /
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/nicecafe/nodevenv/uniserveapi.nicecafe.net/24/bin/node
+  PassengerNodejs /home/nicecasf/nodevenv/uniserveapi.nicecafe.net/24/bin/node
   # Reduce cold-start / spawn-related 503s (common on shared hosting)
   PassengerStartTimeout 180
   PassengerMinInstances 1
