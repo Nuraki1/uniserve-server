@@ -131,12 +131,12 @@ app.get("/__env", (_req, res) => {
 });
 
 // Passenger/cPanel compatibility: Passenger manages the HTTP server.
-// Check if we're running under Passenger (multiple detection methods for reliability)
+// Check if we're running under Passenger (only check for actual Passenger environment variables)
+// Don't use NODE_ENV or PORT as indicators - those can be set in local development too
 const isPassenger = !!(
   process.env.PASSENGER_APP_ENV ||
   process.env.PASSENGER_SOCKET_FILE ||
-  process.env.PHUSION_PASSENGER_VERSION ||
-  (process.env.NODE_ENV === "production" && !process.env.PORT) // In production without explicit PORT, likely Passenger
+  process.env.PHUSION_PASSENGER_VERSION
 );
 
 let server: http.Server;
@@ -242,9 +242,9 @@ setupRoutes();
 
 // For Passenger: export the app (Passenger will handle the server and call app(req, res))
 // For standalone: listen on the port
-// In production, always export for Passenger (it's the only deployment method)
-// In development, use server.listen() for standalone mode
-if (isPassenger || process.env.NODE_ENV === "production") {
+// Only export for Passenger if actually running under Passenger (detected via environment variables)
+// Otherwise, always start the server in standalone mode (works for both dev and production)
+if (isPassenger) {
   // Passenger mode: export the app directly
   // Passenger will manage the HTTP server and call the app with (req, res)
   // Socket.IO server is created but Passenger will route HTTP requests through the Express app
@@ -252,7 +252,7 @@ if (isPassenger || process.env.NODE_ENV === "production") {
   console.log("Exporting Express app for Passenger");
   module.exports = app;
 } else {
-  // Standalone/development mode: start listening on the port
+  // Standalone mode: start listening on the port (works for both dev and production)
   server.listen(env.PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`Server listening on :${env.PORT}`);

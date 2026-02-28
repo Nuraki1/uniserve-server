@@ -18,3 +18,4 @@ ALTER TABLE `UserBranchAccess` ADD CONSTRAINT `UserBranchAccess_branchId_fkey` F
 
 
 
+
