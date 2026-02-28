@@ -4,6 +4,21 @@ import { prisma } from "../prisma";
 export function createPublicRouter() {
   const router = Router();
 
+  // Public branches endpoint for login page quick-select (no authentication required)
+  router.get("/branches", async (_req, res) => {
+    try {
+      const branches = await prisma.branch.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+        take: 200,
+      });
+      return res.json({ success: true, data: branches });
+    } catch (error) {
+      console.error("Error fetching public branches:", error);
+      return res.status(500).json({ success: false, error: "Failed to load branches" });
+    }
+  });
+
   // Minimal user list for quick-select UI (no passwords).
   router.get("/users", async (req, res) => {
     const role = typeof req.query.role === "string" ? req.query.role : undefined;
