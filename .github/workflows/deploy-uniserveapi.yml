@@ -12,6 +12,7 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,6 +49,7 @@ jobs:
 
       - name: Deploy via FTP (cPanel - uniserveapi.nicecafe.net)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        timeout-minutes: 10
         with:
           server: ${{ secrets.CPANEL_FTP_SERVER }}
           port: ${{ secrets.CPANEL_FTP_PORT }}
@@ -65,4 +67,3 @@ jobs:
             **/stderr.log
             **/logs/**
             **/.ftp-deploy-sync-state.json
-
