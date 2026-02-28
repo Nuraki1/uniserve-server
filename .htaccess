@@ -5,7 +5,7 @@
   PassengerAppRoot /home/nicecafe/uniserveapi.nicecafe.net
   PassengerBaseURI /
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/nicecafe/nodevenv/uniserveapi.nicecafe.net/20/bin/node
+  PassengerNodejs /home/nicecafe/nodevenv/uniserveapi.nicecafe.net/24/bin/node
   # Reduce cold-start / spawn-related 503s (common on shared hosting)
   PassengerStartTimeout 180
   PassengerMinInstances 1
