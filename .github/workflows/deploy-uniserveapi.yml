@@ -46,6 +46,15 @@ jobs:
           cp env.example server-deploy/env.example
           cp .htaccess server-deploy/.htaccess
           cp README.md server-deploy/README.md 2>/dev/null || true
+          # Copy generated Prisma client (needed for production)
+          if [ -d "node_modules/.prisma" ]; then
+            mkdir -p server-deploy/node_modules/.prisma
+            cp -R node_modules/.prisma/* server-deploy/node_modules/.prisma/
+          fi
+          if [ -d "node_modules/@prisma" ]; then
+            mkdir -p server-deploy/node_modules/@prisma
+            cp -R node_modules/@prisma/* server-deploy/node_modules/@prisma/
+          fi
 
       - name: Deploy via FTP (cPanel - uniserveapi.nicecafe.net)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -62,6 +71,8 @@ jobs:
             **/.env
             **/.env.*
             **/node_modules/**
+            !**/node_modules/.prisma/**
+            !**/node_modules/@prisma/**
             **/tmp/**
             **/public/**
             **/stderr.log
