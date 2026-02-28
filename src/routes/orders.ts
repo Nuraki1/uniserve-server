@@ -161,12 +161,14 @@ export function createOrdersRouter(io: SocketIOServer) {
         },
       });
 
-      // INSTANT emit - Socket.IO emits are non-blocking, emit immediately for zero delay
+      // INSTANT emit BEFORE HTTP response - Socket.IO emits are non-blocking
+      // Emit immediately so clients get update before HTTP response completes
       if (order.branchId) {
         io.to(`branch:${order.branchId}`).emit("order:updated", order);
       }
       io.emit("order:updated", order);
 
+      // Send HTTP response after emit (emit is already sent)
       return res.json({ success: true, data: order });
     } catch (e: any) {
       // Prisma "Record to update not found."

@@ -7,19 +7,17 @@ export function attachRealtime(server: HttpServer, opts?: { corsOrigin?: true | 
       origin: opts?.corsOrigin ?? true,
       credentials: true,
     },
-    // Optimize for low latency in production
-    transports: ["websocket", "polling"], // Prefer websocket, fallback to polling
+    // Optimize for ZERO-DELAY real-time updates
+    transports: ["websocket"], // WebSocket only for lowest latency (no polling fallback delay)
     allowEIO3: true, // Backward compatibility
-    // Reduce ping/pong intervals for faster connection detection
-    pingTimeout: 20000, // 20 seconds (default is 5000ms, but increase for production stability)
-    pingInterval: 25000, // 25 seconds (default is 25000ms)
-    // Enable compression for faster data transfer
-    perMessageDeflate: {
-      threshold: 1024, // Only compress messages larger than 1KB
-    },
+    // Minimal ping/pong for fastest updates
+    pingTimeout: 10000, // 10 seconds - faster timeout detection
+    pingInterval: 5000, // 5 seconds - faster connection health checks
+    // Disable compression for small messages (faster processing)
+    perMessageDeflate: false, // Disable compression for instant delivery
     // Connection optimization
-    maxHttpBufferSize: 1e6, // 1MB max message size
-    // Enable HTTP long-polling as fallback
+    maxHttpBufferSize: 1e7, // 10MB max message size
+    // Enable HTTP long-polling as fallback (but prefer websocket)
     allowUpgrades: true,
   });
 
