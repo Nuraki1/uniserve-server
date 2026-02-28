@@ -11,7 +11,7 @@
     "prisma:migrate": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate deploy",
     "prisma:migrate:dev": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate dev",
     "prisma:push": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 db push",
-    "postinstall": "npx --yes prisma@^5.22.0 generate || echo 'Prisma generate skipped (will run on first use)'"
+    "postinstall": "if [ -f prisma/schema.prisma ]; then npx --yes prisma@^5.22.0 generate; else echo 'Prisma schema not found. Run: npm run prisma:generate'; fi"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
