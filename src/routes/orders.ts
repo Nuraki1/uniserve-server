@@ -132,8 +132,15 @@ export function createOrdersRouter(io: SocketIOServer) {
       },
     });
 
-    if (order.branchId) io.to(`branch:${order.branchId}`).emit("order:created", order);
-    io.emit("order:created", order);
+    // Emit to branch-specific room first (more targeted, faster)
+    // Then emit globally for admin/cross-branch views
+    // Use setImmediate to ensure HTTP response is sent before Socket.IO emit (non-blocking)
+    setImmediate(() => {
+      if (order.branchId) {
+        io.to(`branch:${order.branchId}`).emit("order:created", order);
+      }
+      io.emit("order:created", order);
+    });
 
     return res.status(201).json({ success: true, data: order });
   });
@@ -156,8 +163,13 @@ export function createOrdersRouter(io: SocketIOServer) {
         },
       });
 
-      if (order.branchId) io.to(`branch:${order.branchId}`).emit("order:updated", order);
-      io.emit("order:updated", order);
+      // Emit status update immediately (non-blocking)
+      setImmediate(() => {
+        if (order.branchId) {
+          io.to(`branch:${order.branchId}`).emit("order:updated", order);
+        }
+        io.emit("order:updated", order);
+      });
 
       return res.json({ success: true, data: order });
     } catch (e: any) {
@@ -209,8 +221,13 @@ export function createOrdersRouter(io: SocketIOServer) {
     await prisma.order.delete({ where: { id: orderId } });
 
     const payload = { id: orderId, branchId: existing.branchId ?? null };
-    if (existing.branchId) io.to(`branch:${existing.branchId}`).emit("order:deleted", payload);
-    io.emit("order:deleted", payload);
+    // Emit deletion immediately (non-blocking)
+    setImmediate(() => {
+      if (existing.branchId) {
+        io.to(`branch:${existing.branchId}`).emit("order:deleted", payload);
+      }
+      io.emit("order:deleted", payload);
+    });
 
     return res.json({ success: true, data: payload });
   });
@@ -298,8 +315,13 @@ export function createOrdersRouter(io: SocketIOServer) {
         return order;
       });
 
-      if (result.branchId) io.to(`branch:${result.branchId}`).emit("order:updated", result);
-      io.emit("order:updated", result);
+      // Emit payment update immediately (non-blocking)
+      setImmediate(() => {
+        if (result.branchId) {
+          io.to(`branch:${result.branchId}`).emit("order:updated", result);
+        }
+        io.emit("order:updated", result);
+      });
 
       return res.json({ success: true, data: result });
     } catch (e: any) {
@@ -347,8 +369,13 @@ export function createOrdersRouter(io: SocketIOServer) {
         },
       });
 
-      if (order.branchId) io.to(`branch:${order.branchId}`).emit("order:updated", order);
-      io.emit("order:updated", order);
+      // Emit payment method update immediately (non-blocking)
+      setImmediate(() => {
+        if (order.branchId) {
+          io.to(`branch:${order.branchId}`).emit("order:updated", order);
+        }
+        io.emit("order:updated", order);
+      });
 
       return res.json({ success: true, data: order });
     } catch {
