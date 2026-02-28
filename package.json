@@ -7,11 +7,11 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json && node scripts/copy-htaccess.cjs",
     "server": "node dist/index.js",
-    "prisma:generate": "node scripts/ensure-env.cjs && npx prisma generate",
-    "prisma:migrate": "node scripts/ensure-env.cjs && npx prisma migrate deploy",
-    "prisma:migrate:dev": "node scripts/ensure-env.cjs && npx prisma migrate dev",
-    "prisma:push": "node scripts/ensure-env.cjs && npx prisma db push",
-    "postinstall": "npx prisma generate || echo 'Prisma generate skipped (will run on first use)'"
+    "prisma:generate": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 generate",
+    "prisma:migrate": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate deploy",
+    "prisma:migrate:dev": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate dev",
+    "prisma:push": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 db push",
+    "postinstall": "npx --yes prisma@^5.22.0 generate || echo 'Prisma generate skipped (will run on first use)'"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
