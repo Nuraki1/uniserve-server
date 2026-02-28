@@ -41,6 +41,10 @@ Options -Indexes -MultiViews
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 </IfModule>
+
+# Note: Passenger automatically handles WebSocket upgrades for Socket.IO
+# No additional rewrite rules needed - Passenger proxies /socket.io/ requests to Node.js
+# The Socket.IO server is configured with proper CORS and path settings in realtime.ts
 <IfModule mod_mime.c>
   AddType image/webp .webp
   AddType image/svg+xml .svg
