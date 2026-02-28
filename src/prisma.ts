@@ -7,6 +7,11 @@ export const prisma = new PrismaClient({
   // This prevents blocking during module load
 });
 
+// Graceful shutdown handler
+process.on("beforeExit", async () => {
+  await prisma.$disconnect();
+});
+
 
 
 

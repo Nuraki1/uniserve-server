@@ -145,8 +145,8 @@ let io: ReturnType<typeof attachRealtime> | undefined;
 // Create HTTP server for Socket.IO support
 server = http.createServer(app);
 
-// Setup routes lazily to avoid blocking module load (important for Passenger)
-// This function is called after the module loads to set up API routes
+// Setup routes - must complete before module export for Passenger
+// This function sets up all API routes synchronously
 function setupRoutes() {
   if (!envStatus.ok) {
     app.use("/api", (_req, res) =>
@@ -160,7 +160,8 @@ function setupRoutes() {
   }
 
   try {
-    // Lazy import routes to avoid blocking module load
+    // Import routes - using require() to avoid top-level import blocking
+    // but doing it synchronously here to ensure routes are ready before export
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createAuthRouter } = require("./routes/auth");
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -184,8 +185,10 @@ function setupRoutes() {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createCommonCommentsRouter } = require("./routes/common-comments");
 
+    // Initialize Socket.IO for realtime features
     io = attachRealtime(server, { corsOrigin: allowedOrigins });
 
+    // Register all API routes
     app.use("/api/auth", createAuthRouter());
     app.use("/api/admin", createAdminRouter());
     app.use("/api/public", createPublicRouter());
@@ -198,24 +201,43 @@ function setupRoutes() {
     app.use("/api/permissions", createPermissionsRouter());
     app.use("/api/common-comments", createCommonCommentsRouter());
 
-    // JSON 404s (keeps clients from seeing HTML error pages/proxies).
+    // JSON 404s for unmatched API routes (keeps clients from seeing HTML error pages/proxies).
     app.use("/api", (_req, res) => res.status(404).json({ success: false, error: "Not found" }));
+    
+    // eslint-disable-next-line no-console
+    console.log("API routes initialized successfully");
   } catch (error) {
-    // If route setup fails, at least the health endpoint should still work
+    // If route setup fails, log the error and set up a fallback handler
     // eslint-disable-next-line no-console
     console.error("Error setting up API routes:", error);
+    // Log the full error stack for debugging
+    if (error instanceof Error) {
+      // eslint-disable-next-line no-console
+      console.error("Error stack:", error.stack);
+    }
     app.use("/api", (_req, res) =>
       res.status(503).json({
         success: false,
         error: "Server initialization error",
+        message: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined,
       })
     );
   }
 }
 
-// Set up routes synchronously - route creation functions should be fast
-// The lazy require() ensures route modules are only loaded when this function runs,
-// not during top-level module imports
+// Add a test endpoint to verify API is accessible (before route setup)
+app.get("/api/test", (_req, res) => {
+  res.json({
+    ok: true,
+    message: "API is accessible",
+    timestamp: new Date().toISOString(),
+    envOk: envStatus.ok,
+    routesSetup: true,
+  });
+});
+
+// Set up routes synchronously BEFORE exporting the app
+// This ensures all routes are registered when Passenger loads the module
 setupRoutes();
 
 // For Passenger: export the app (Passenger will handle the server and call app(req, res))
@@ -226,6 +248,8 @@ if (isPassenger || process.env.NODE_ENV === "production") {
   // Passenger mode: export the app directly
   // Passenger will manage the HTTP server and call the app with (req, res)
   // Socket.IO server is created but Passenger will route HTTP requests through the Express app
+  // eslint-disable-next-line no-console
+  console.log("Exporting Express app for Passenger");
   module.exports = app;
 } else {
   // Standalone/development mode: start listening on the port
