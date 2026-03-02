@@ -101,6 +101,7 @@ export function createAuthRouter() {
           allowedBranchIds,
           avatarUrl: user.avatarUrl,
           kitchenAllowedCategories: user.kitchenAllowedCategories,
+          subBranchId: user.subBranchId,
           createdAt: user.createdAt,
         },
       },
@@ -123,6 +124,7 @@ export function createAuthRouter() {
         allowedBranchIds: u.allowedBranchIds ?? null,
         avatarUrl: user.avatarUrl,
         kitchenAllowedCategories: user.kitchenAllowedCategories,
+        subBranchId: user.subBranchId,
         createdAt: user.createdAt,
       },
     });

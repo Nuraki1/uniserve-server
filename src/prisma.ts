@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 
 // Configure Prisma Client to avoid eager connections and handle timeouts gracefully
 export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+  log: ["error", "warn"], // Only log errors and warnings, not queries
   // Don't connect eagerly - only connect on first query
   // This prevents blocking during module load
 });

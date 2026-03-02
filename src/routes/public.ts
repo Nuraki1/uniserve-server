@@ -31,7 +31,7 @@ export function createPublicRouter() {
     const users = await prisma.user.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, role: true, branchId: true, avatarUrl: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, branchId: true, avatarUrl: true, subBranchId: true, createdAt: true },
       take: 200,
     });
 

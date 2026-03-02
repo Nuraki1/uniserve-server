@@ -107,30 +107,86 @@ export function createOrdersRouter(io: SocketIOServer) {
     const discount = 0;
     const total = subtotal + tax - discount;
 
+    // Detect sub-branches from menu items and initialize per-sub-branch statuses
+    const menuItemIds = parsed.data.items
+      .map((item: any) => item.menuItemId)
+      .filter((id: any) => id && typeof id === 'string' && id.trim().length > 0);
+    
+    let subBranchStatuses: Record<string, string> | null = null;
+    if (menuItemIds.length > 0) {
+      try {
+        const menuItems = await prisma.menuItem.findMany({
+          where: { id: { in: menuItemIds } },
+          select: { id: true, subBranchId: true },
+        });
+        
+        const subBranchMap = new Map<string, boolean>();
+        for (const item of parsed.data.items as any[]) {
+          if (item.menuItemId) {
+            const menuItem = menuItems.find(m => m.id === item.menuItemId);
+            if (menuItem?.subBranchId) {
+              subBranchMap.set(menuItem.subBranchId, true);
+            }
+          }
+        }
+        
+        // Initialize status for each sub-branch found
+        if (subBranchMap.size > 0) {
+          subBranchStatuses = {};
+          for (const subBranchId of subBranchMap.keys()) {
+            subBranchStatuses[subBranchId] = "pending";
+          }
+        }
+      } catch (error) {
+        // If there's an error fetching menu items, continue without sub-branch tracking
+        console.error('Error detecting sub-branches for order:', error);
+      }
+    }
+
     const maxOrder = await prisma.order.aggregate({
       where: branchId ? { branchId } : undefined,
       _max: { orderNumber: true },
     });
     const nextOrderNumber = (maxOrder._max.orderNumber ?? 0) + 1;
 
+    const orderData: any = {
+      orderNumber: nextOrderNumber,
+      items: parsed.data.items as unknown as Prisma.InputJsonValue,
+      table: parsed.data.table,
+      customer: parsed.data.customer,
+      customerId: parsed.data.customerId,
+      waiter: parsed.data.waiter,
+      waiterUserId: parsed.data.waiterUserId,
+      branchId: branchId ?? undefined,
+      clientRequestId: parsed.data.clientRequestId,
+      subtotal,
+      tax,
+      discount,
+      total,
+      status: "pending",
+    };
+
+    // Always include subBranchStatuses, even if null (for proper tracking)
+    if (subBranchStatuses) {
+      orderData.subBranchStatuses = subBranchStatuses as unknown as Prisma.InputJsonValue;
+    } else {
+      orderData.subBranchStatuses = null;
+    }
+
     const order = await prisma.order.create({
-      data: {
-        orderNumber: nextOrderNumber,
-        items: parsed.data.items as unknown as Prisma.InputJsonValue,
-        table: parsed.data.table,
-        customer: parsed.data.customer,
-        customerId: parsed.data.customerId,
-        waiter: parsed.data.waiter,
-        waiterUserId: parsed.data.waiterUserId,
-        branchId: branchId ?? undefined,
-        clientRequestId: parsed.data.clientRequestId,
-        subtotal,
-        tax,
-        discount,
-        total,
-        status: "pending",
-      },
+      data: orderData,
     });
+
+    // Debug: Log order creation with sub-branch info
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Order Created]', {
+        orderNumber: order.orderNumber,
+        branchId: order.branchId,
+        subBranchStatuses: order.subBranchStatuses,
+        itemsCount: (order.items as any[])?.length || 0,
+        firstItemMenuItemId: (order.items as any[])?.[0]?.menuItemId,
+      });
+    }
 
     // INSTANT emit - Socket.IO emits are non-blocking, so emit immediately for zero delay
     // Emit to branch-specific room first (targeted, fastest)
@@ -145,20 +201,59 @@ export function createOrdersRouter(io: SocketIOServer) {
 
   router.put("/:id/status", requireAction("update-order-status"), async (req, res) => {
     const orderId = req.params.id;
-    const parsed = z.object({ status: orderStatusSchema }).safeParse(req.body);
+    const authed = req.user!;
+    
+    // Support both regular status update and per-sub-branch status update
+    const parsed = z.object({ 
+      status: orderStatusSchema,
+      subBranchId: z.string().optional(), // If provided, update only this sub-branch's status
+    }).safeParse(req.body);
+    
     if (!parsed.success) {
       return res.status(400).json({ success: false, error: parsed.error.message });
     }
 
     try {
       const status = parsed.data.status;
+      const subBranchId = parsed.data.subBranchId;
+      
+      let updateData: any = {};
+      
+      if (subBranchId && authed.role === "kitchen") {
+        // Kitchen user updating status for their specific sub-branch
+        const order = await prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+        
+        // Get current sub-branch statuses or initialize
+        const currentSubBranchStatuses = (order.subBranchStatuses as Record<string, string> | null) || {};
+        currentSubBranchStatuses[subBranchId] = status;
+        
+        updateData.subBranchStatuses = currentSubBranchStatuses;
+        
+        // Update main order status based on sub-branch statuses
+        // If all sub-branches are prepared, mark order as prepared
+        // If any sub-branch is preparing, mark order as preparing
+        const allStatuses = Object.values(currentSubBranchStatuses);
+        if (allStatuses.every(s => s === "prepared" || s === "completed")) {
+          updateData.status = "prepared";
+          updateData.preparedAt = new Date();
+        } else if (allStatuses.some(s => s === "preparing")) {
+          updateData.status = "preparing";
+        } else if (allStatuses.some(s => s === "accepted")) {
+          updateData.status = "accepted";
+        }
+      } else {
+        // Regular status update (for non-sub-branch orders or admin override)
+        updateData.status = status;
+        updateData.preparedAt = status === "prepared" ? new Date() : undefined;
+        updateData.paidAt = status === "paid" ? new Date() : undefined;
+      }
+      
       const order = await prisma.order.update({
         where: { id: orderId },
-        data: {
-          status,
-          preparedAt: status === "prepared" ? new Date() : undefined,
-          paidAt: status === "paid" ? new Date() : undefined,
-        },
+        data: updateData,
       });
 
       // INSTANT emit BEFORE HTTP response - Socket.IO emits are non-blocking

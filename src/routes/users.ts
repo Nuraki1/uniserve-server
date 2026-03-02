@@ -34,7 +34,7 @@ export function createUsersRouter() {
               }
             : {}),
         },
-        select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true, kitchenAllowedCategories: true },
+        select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true, kitchenAllowedCategories: true, subBranchId: true },
       });
       return res.json({ success: true, data: user });
     } catch {

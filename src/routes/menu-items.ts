@@ -12,6 +12,7 @@ const menuItemCreateSchema = z.object({
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   branchId: z.string().optional(),
+  subBranchId: z.string().optional(),
 });
 
 const menuItemUpdateSchema = z.object({
@@ -21,6 +22,7 @@ const menuItemUpdateSchema = z.object({
   description: z.string().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   branchId: z.string().nullable().optional(),
+  subBranchId: z.string().nullable().optional(),
   available: z.boolean().optional(),
 });
 
@@ -55,6 +57,7 @@ export function createMenuItemsRouter() {
         description: parsed.data.description?.trim() || null,
         imageUrl: parsed.data.imageUrl || null,
         branchId: parsed.data.branchId || null,
+        subBranchId: parsed.data.subBranchId || null,
       },
     });
 
@@ -75,6 +78,7 @@ export function createMenuItemsRouter() {
           ...(parsed.data.description !== undefined ? { description: parsed.data.description ?? null } : {}),
           ...(parsed.data.imageUrl !== undefined ? { imageUrl: parsed.data.imageUrl ?? null } : {}),
           ...(parsed.data.branchId !== undefined ? { branchId: parsed.data.branchId ?? null } : {}),
+          ...(parsed.data.subBranchId !== undefined ? { subBranchId: parsed.data.subBranchId ?? null } : {}),
           ...(parsed.data.available !== undefined ? { available: parsed.data.available } : {}),
         },
       });

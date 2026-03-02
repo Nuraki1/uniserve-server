@@ -59,10 +59,14 @@ model User {
   // For kitchen role: which menu categories this account is responsible for.
   // Stored as JSON array of strings (e.g. ["Pizza","Drinks"]).
   kitchenAllowedCategories Json?
+  // For kitchen role: which sub-branch this kitchen account is assigned to (e.g., "baresta", "restaurant kitchen").
+  subBranchId  String?
+  subBranch    SubBranch? @relation(fields: [subBranchId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([role, branchId])
+  @@index([subBranchId])
 }
 
 model UserBranchAccess {
@@ -86,8 +90,23 @@ model Branch {
   manager   String?
   userAccesses UserBranchAccess[]
   customerAccesses CustomerBranchAccess[]
+  subBranches SubBranch[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model SubBranch {
+  id        String   @id @default(uuid())
+  name      String
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@unique([branchId, name])
 }
 
 model MenuItem {
@@ -99,11 +118,14 @@ model MenuItem {
   available   Boolean  @default(true)
   imageUrl    String?  @db.LongText
   branchId    String?
+  subBranchId String?
+  subBranch   SubBranch? @relation(fields: [subBranchId], references: [id], onDelete: SetNull)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([branchId, category])
+  @@index([subBranchId])
   @@index([available])
 }
 
@@ -177,6 +199,10 @@ model Order {
 
   // Lightweight denormalized shape to match current frontend payloads
   items         Json
+  // Track order status per sub-branch: { "subBranchId": "preparing", ... }
+  // This allows different sub-branch kitchens to update status independently
+  subBranchStatuses Json?     // Map of subBranchId -> OrderStatus
+
   table         String?
   customer      String?
   customerId    String?

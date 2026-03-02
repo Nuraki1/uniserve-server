@@ -177,6 +177,8 @@ function setupRoutes() {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createBranchesRouter } = require("./routes/branches");
     // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createSubBranchesRouter } = require("./routes/sub-branches");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createCustomersRouter } = require("./routes/customers");
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createTablesRouter } = require("./routes/tables");
@@ -196,6 +198,7 @@ function setupRoutes() {
     app.use("/api/orders", createOrdersRouter(io));
     app.use("/api/menu-items", createMenuItemsRouter());
     app.use("/api/branches", createBranchesRouter());
+    app.use("/api/sub-branches", createSubBranchesRouter());
     app.use("/api/customers", createCustomersRouter());
     app.use("/api/tables", createTablesRouter());
     app.use("/api/permissions", createPermissionsRouter());

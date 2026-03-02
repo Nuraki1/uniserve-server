@@ -14,6 +14,8 @@ const createUserSchema = z
     // Optional multi-branch assignment for staff roles (cashier/waiter/kitchen).
     // If provided, user can access exactly these branches.
     branchIds: z.array(z.string().min(1)).optional(),
+    // For kitchen role: which sub-branch this kitchen account is assigned to.
+    subBranchId: z.string().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.role === "admin") return;
@@ -41,6 +43,7 @@ const updateUserSchema = z.object({
   branchId: z.string().nullable().optional(),
   branchIds: z.array(z.string().min(1)).optional(),
   avatarUrl: z.string().nullable().optional(),
+  subBranchId: z.string().nullable().optional(),
 });
 
 const updatePasswordSchema = z.object({
@@ -76,6 +79,7 @@ export function createAdminRouter() {
             : dedupedBranchIds.length > 0
               ? dedupedBranchIds[0]
               : (parsed.data.branchId ?? null),
+        subBranchId: parsed.data.role === "kitchen" ? (parsed.data.subBranchId ?? null) : null,
       },
     });
 
@@ -92,7 +96,7 @@ export function createAdminRouter() {
 
     return res.status(201).json({
       success: true,
-      data: { id: user.id, email: user.email, name: user.name, role: user.role, branchId: user.branchId, createdAt: user.createdAt },
+      data: { id: user.id, email: user.email, name: user.name, role: user.role, branchId: user.branchId, subBranchId: user.subBranchId, createdAt: user.createdAt },
     });
   });
 
@@ -107,6 +111,7 @@ export function createAdminRouter() {
         branchId: true,
         createdAt: true,
         avatarUrl: true,
+        subBranchId: true,
         branchAccesses: { select: { branchId: true } },
       },
     });
@@ -128,8 +133,9 @@ export function createAdminRouter() {
           ...(parsed.data.name ? { name: parsed.data.name } : {}),
           ...(parsed.data.branchId !== undefined && dedupedBranchIds === undefined ? { branchId: parsed.data.branchId } : {}),
           ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl } : {}),
+          ...(parsed.data.subBranchId !== undefined ? { subBranchId: parsed.data.subBranchId ?? null } : {}),
         },
-        select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true },
+        select: { id: true, email: true, name: true, role: true, branchId: true, createdAt: true, avatarUrl: true, subBranchId: true },
       });
 
       // Update multi-branch access list if branchIds was provided.
