@@ -47,6 +47,78 @@ const updatePaymentMethodSchema = z.object({
   bankType: z.string().optional().nullable(),
 });
 
+const adminOrderItemSchema = z
+  .object({
+    name: z.string().min(1),
+    price: z.number(),
+    quantity: z.number().int().positive(),
+    notes: z.string().optional(),
+    menuItemId: z.string().optional(),
+  })
+  .passthrough();
+
+const adminUpdateOrderSchema = z.object({
+  items: z.array(adminOrderItemSchema).min(1),
+  table: z.union([z.string(), z.null()]).optional(),
+  customer: z.union([z.string(), z.null()]).optional(),
+  customerId: z.union([z.string(), z.null()]).optional(),
+  waiter: z.union([z.string(), z.null()]).optional(),
+  waiterUserId: z.union([z.string(), z.null()]).optional(),
+  branchId: z.union([z.string(), z.null()]).optional(),
+  status: orderStatusSchema,
+  discount: z.number().optional().default(0),
+  tax: z.number().optional().default(0),
+  paymentMethod: z.enum(["cash", "card", "bank", "prepaid", "credit"]).nullable().optional(),
+  bankType: z.union([z.string(), z.null()]).optional(),
+});
+
+async function computeSubBranchStatusesFromOrderItems(items: any[]): Promise<Record<string, string> | null> {
+  const menuItemIds = items
+    .map((item: any) => item.menuItemId)
+    .filter((id: any) => id && typeof id === "string" && id.trim().length > 0);
+  if (menuItemIds.length === 0) return null;
+  const menuRows = await prisma.menuItem.findMany({
+    where: { id: { in: menuItemIds } },
+    select: { id: true, subBranchId: true },
+  });
+  const subBranchMap = new Map<string, boolean>();
+  for (const item of items as any[]) {
+    if (item.menuItemId) {
+      const menuItem = menuRows.find((m) => m.id === item.menuItemId);
+      if (menuItem?.subBranchId) subBranchMap.set(menuItem.subBranchId, true);
+    }
+  }
+  if (subBranchMap.size === 0) return null;
+  const subBranchStatuses: Record<string, string> = {};
+  for (const subBranchId of subBranchMap.keys()) {
+    subBranchStatuses[subBranchId] = "pending";
+  }
+  return subBranchStatuses;
+}
+
+function mergeSubBranchStatuses(
+  existing: Record<string, string> | null | undefined,
+  computed: Record<string, string> | null
+): Record<string, string> | null {
+  if (!computed || Object.keys(computed).length === 0) return null;
+  const prev = existing && typeof existing === "object" ? { ...existing } : {};
+  const next: Record<string, string> = {};
+  for (const k of Object.keys(computed)) {
+    next[k] = typeof prev[k] === "string" ? prev[k] : "pending";
+  }
+  return next;
+}
+
+/** Inclusive start and exclusive end of the server's local calendar day (used for daily order # reset). */
+function localCalendarDayBounds(when: Date): { start: Date; end: Date } {
+  const y = when.getFullYear();
+  const m = when.getMonth();
+  const d = when.getDate();
+  const start = new Date(y, m, d, 0, 0, 0, 0);
+  const end = new Date(y, m, d + 1, 0, 0, 0, 0);
+  return { start, end };
+}
+
 export function createOrdersRouter(io: SocketIOServer) {
   const router = Router();
 
@@ -115,36 +187,21 @@ export function createOrdersRouter(io: SocketIOServer) {
     let subBranchStatuses: Record<string, string> | null = null;
     if (menuItemIds.length > 0) {
       try {
-        const menuItems = await prisma.menuItem.findMany({
-          where: { id: { in: menuItemIds } },
-          select: { id: true, subBranchId: true },
-        });
-        
-        const subBranchMap = new Map<string, boolean>();
-        for (const item of parsed.data.items as any[]) {
-          if (item.menuItemId) {
-            const menuItem = menuItems.find(m => m.id === item.menuItemId);
-            if (menuItem?.subBranchId) {
-              subBranchMap.set(menuItem.subBranchId, true);
-            }
-          }
-        }
-        
-        // Initialize status for each sub-branch found
-        if (subBranchMap.size > 0) {
-          subBranchStatuses = {};
-          for (const subBranchId of subBranchMap.keys()) {
-            subBranchStatuses[subBranchId] = "pending";
-          }
-        }
+        subBranchStatuses = await computeSubBranchStatusesFromOrderItems(parsed.data.items as any[]);
       } catch (error) {
-        // If there's an error fetching menu items, continue without sub-branch tracking
-        console.error('Error detecting sub-branches for order:', error);
+        console.error("Error detecting sub-branches for order:", error);
       }
     }
 
+    const { start: dayStart, end: dayEnd } = localCalendarDayBounds(new Date());
     const maxOrder = await prisma.order.aggregate({
-      where: branchId ? { branchId } : undefined,
+      where: {
+        branchId: branchId ?? null,
+        createdAt: {
+          gte: dayStart,
+          lt: dayEnd,
+        },
+      },
       _max: { orderNumber: true },
     });
     const nextOrderNumber = (maxOrder._max.orderNumber ?? 0) + 1;
@@ -197,6 +254,116 @@ export function createOrdersRouter(io: SocketIOServer) {
     io.emit("order:created", order);
 
     return res.status(201).json({ success: true, data: order });
+  });
+
+  // Admin full order replace — explicit path so it is never mistaken for other :id routes.
+  router.put("/:id/admin", async (req, res) => {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const orderId = req.params.id;
+    const parsed = adminUpdateOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.message });
+    }
+
+    try {
+      const existing = await prisma.order.findUnique({ where: { id: orderId } });
+      if (!existing) return res.status(404).json({ success: false, error: "Order not found" });
+
+      const body = parsed.data;
+      const items = body.items as any[];
+      const subtotal = items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
+      const tax = body.tax ?? 0;
+      const discount = body.discount ?? 0;
+      const total = subtotal + tax - discount;
+
+      let computedSb: Record<string, string> | null = null;
+      try {
+        computedSb = await computeSubBranchStatusesFromOrderItems(items);
+      } catch (e) {
+        console.error(e);
+      }
+      const subBranchStatusesMerged = mergeSubBranchStatuses(
+        (existing.subBranchStatuses as Record<string, string> | null) || undefined,
+        computedSb
+      );
+
+      const nextBranchId =
+        body.branchId !== undefined ? (body.branchId === null ? null : body.branchId) : existing.branchId;
+
+      const table = body.table !== undefined ? body.table : existing.table;
+      const customer = body.customer !== undefined ? body.customer : existing.customer;
+      const customerId = body.customerId !== undefined ? body.customerId : existing.customerId;
+      const waiter = body.waiter !== undefined ? body.waiter : existing.waiter;
+      const waiterUserId = body.waiterUserId !== undefined ? body.waiterUserId : existing.waiterUserId;
+
+      const status = body.status;
+
+      let preparedAt: Date | null = (existing.preparedAt as Date | null) ?? null;
+      let paidAt: Date | null = (existing.paidAt as Date | null) ?? null;
+      let paymentMethod: any = existing.paymentMethod;
+      let bankType: string | null = (existing.bankType as string | null) ?? null;
+
+      if (status === "pending" || status === "accepted" || status === "preparing") {
+        preparedAt = null;
+        paidAt = null;
+        paymentMethod = null;
+        bankType = null;
+      } else if (status === "prepared") {
+        preparedAt = existing.preparedAt ? new Date(existing.preparedAt as Date) : new Date();
+        paidAt = null;
+        paymentMethod = null;
+        bankType = null;
+      } else if (status === "completed") {
+        preparedAt = existing.preparedAt ? new Date(existing.preparedAt as Date) : new Date();
+        paidAt = null;
+        paymentMethod = null;
+        bankType = null;
+      } else if (status === "paid") {
+        preparedAt = existing.preparedAt ? new Date(existing.preparedAt as Date) : new Date();
+        paidAt = existing.paidAt ? new Date(existing.paidAt as Date) : new Date();
+        paymentMethod = (body.paymentMethod ?? existing.paymentMethod ?? "cash") as any;
+        bankType = paymentMethod === "bank" ? (body.bankType ?? existing.bankType ?? null) : null;
+      }
+
+      const order = await prisma.order.update({
+        where: { id: orderId },
+        data: {
+          items: items as unknown as Prisma.InputJsonValue,
+          subtotal,
+          tax,
+          discount,
+          total,
+          status,
+          table: table === null ? null : table === undefined ? undefined : table,
+          customer: customer === null ? null : customer === undefined ? undefined : customer,
+          customerId: customerId === null ? null : customerId === undefined ? undefined : customerId,
+          waiter: waiter === null ? null : waiter === undefined ? undefined : waiter,
+          waiterUserId: waiterUserId === null ? null : waiterUserId === undefined ? undefined : waiterUserId,
+          branchId: nextBranchId === null ? null : nextBranchId === undefined ? undefined : nextBranchId,
+          subBranchStatuses: subBranchStatusesMerged as any,
+          preparedAt,
+          paidAt,
+          paymentMethod: paymentMethod ?? null,
+          bankType: bankType ?? null,
+        },
+      });
+
+      if (order.branchId) {
+        io.to(`branch:${order.branchId}`).emit("order:updated", order);
+      }
+      io.emit("order:updated", order);
+
+      return res.json({ success: true, data: order });
+    } catch (e: any) {
+      if (e?.code === "P2025") {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+      console.error("admin order update", e);
+      return res.status(500).json({ success: false, error: "Failed to update order" });
+    }
   });
 
   router.put("/:id/status", requireAction("update-order-status"), async (req, res) => {
@@ -274,7 +441,7 @@ export function createOrdersRouter(io: SocketIOServer) {
     }
   });
 
-  // Waiter/Kitchen can remove an order ONLY while it's still pending (before kitchen starts preparing).
+  // Admin: permanent delete for any status. Waiter/Kitchen: pending only (same branch / own waiter).
   router.delete("/:id", async (req, res) => {
     const orderId = req.params.id;
     const authed = req.user!;
@@ -294,20 +461,22 @@ export function createOrdersRouter(io: SocketIOServer) {
       }
     }
 
-    // Only pending orders can be removed.
-    if (existing.status !== "pending") {
-      return res.status(409).json({
-        success: false,
-        error: "Only pending orders can be removed",
-      });
-    }
+    const isAdmin = authed.role === "admin";
 
-    // Waiters can only remove their own orders.
-    if (authed.role === "waiter") {
-      const matchesById = existing.waiterUserId ? String(existing.waiterUserId) === String(authed.id) : false;
-      const matchesByName = existing.waiter ? String(existing.waiter).trim() === String(authed.name).trim() : false;
-      if (!matchesById && !matchesByName) {
-        return res.status(403).json({ success: false, error: "Forbidden" });
+    if (!isAdmin) {
+      if (existing.status !== "pending") {
+        return res.status(409).json({
+          success: false,
+          error: "Only pending orders can be removed",
+        });
+      }
+
+      if (authed.role === "waiter") {
+        const matchesById = existing.waiterUserId ? String(existing.waiterUserId) === String(authed.id) : false;
+        const matchesByName = existing.waiter ? String(existing.waiter).trim() === String(authed.name).trim() : false;
+        if (!matchesById && !matchesByName) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
       }
     }
 

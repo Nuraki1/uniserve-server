@@ -14,6 +14,16 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().optional(),
 
   BOOTSTRAP_TOKEN: z.string().optional(),
+
+  /** Base URL for links in password-reset emails (e.g. https://app.example.com). Falls back to first CLIENT_ORIGIN. */
+  PASSWORD_RESET_CLIENT_URL: z.string().optional(),
+
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional().default(587),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

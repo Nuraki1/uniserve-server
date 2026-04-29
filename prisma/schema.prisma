@@ -55,6 +55,7 @@ model User {
   // - If they have no rows and branchId is set, they can access only that one branch.
   // - If they have no rows and branchId is null, they have access to all branches (legacy behavior for admin + optional staff).
   branchAccesses UserBranchAccess[]
+  passwordResetTokens PasswordResetToken[]
   avatarUrl    String?  @db.LongText
   // For kitchen role: which menu categories this account is responsible for.
   // Stored as JSON array of strings (e.g. ["Pizza","Drinks"]).
@@ -67,6 +68,19 @@ model User {
 
   @@index([role, branchId])
   @@index([subBranchId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @db.VarChar(64)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserBranchAccess {

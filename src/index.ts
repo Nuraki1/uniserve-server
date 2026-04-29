@@ -1,33 +1,5 @@
-// Environment variables:
-// - In production (cPanel/Passenger), env vars are typically provided by the hosting panel.
-// - For local dev or when panel env isn't set, we load a `.env` file.
-//
-// IMPORTANT: do not rely on `process.cwd()` because cPanel/Passenger often starts the app
-// with a different working directory. Instead, try both:
-// - `<appRoot>/.env` (via cwd)
-// - `<appRoot>/.env` (via __dirname, which is `dist/` in production builds)
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const dotenv = require("dotenv");
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const path = require("path");
-
-  // process
-
-  const missingRequired = !process.env.DATABASE_URL?.trim() || !process.env.JWT_SECRET?.trim();
-  if (process.env.NODE_ENV !== "production" || missingRequired) {
-    const candidates = [
-      path.resolve(process.cwd(), ".env"),
-      path.resolve(__dirname, "..", ".env"),
-    ];
-    for (const p of candidates) {
-      const loaded = dotenv.config({ path: p });
-      if (!loaded.error) break;
-    }
-  }
-} catch {
-  // dotenv is optional; env.ts will validate and print a clear error if vars are missing.
-}
+// Load `.env` first — see `load-env.ts` (imports run before other top-level code).
+import "./load-env";
 import http from "http";
 import express from "express";
 import cors from "cors";
