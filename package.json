@@ -15,7 +15,7 @@
     "prisma:migrate": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate deploy",
     "prisma:migrate:dev": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 migrate dev",
     "prisma:push": "node scripts/ensure-env.cjs && npx --yes prisma@^5.22.0 db push",
-    "postinstall": "node scripts/postinstall-prisma.cjs"
+    "postinstall": "node --eval \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const root=process.cwd();const schemaPath=path.join(root,'prisma','schema.prisma');if(!fs.existsSync(schemaPath)){console.log('[postinstall] prisma/schema.prisma not found — skip prisma generate');process.exit(0);}const result=spawnSync('npx',['--yes','prisma@^5.22.0','generate'],{cwd:root,stdio:'inherit',shell:true,env:process.env});process.exit(result.status===null?1:result.status);\""
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
