@@ -1,11 +1,12 @@
 <IfModule mod_passenger.c>
   PassengerEnabled on
   PassengerAppType node
-  # App root must match your cPanel "Application root" directory
-  PassengerAppRoot /home/nicecasf/uniserveapi.nicecafe.net
+  # Must match cPanel → Setup Node.js App → Application root (full path on disk).
+  # If these paths are wrong for your account, Passenger never proxies to Node → Apache 404 on /health.
+  PassengerAppRoot /home/etcodewq/uniserveapi.etcodex.com
   PassengerBaseURI /
   PassengerStartupFile dist/index.js
-  PassengerNodejs /home/nicecasf/nodevenv/uniserveapi.nicecafe.net/24/bin/node
+  PassengerNodejs /home/etcodewq/nodevenv/uniserveapi.etcodex.com/20/bin/node
   # Reduce cold-start / spawn-related 503s (common on shared hosting)
   PassengerStartTimeout 180
   PassengerMinInstances 1
@@ -14,7 +15,7 @@
   PassengerFriendlyErrorPages off
   PassengerEnvVar NODE_ENV production
   # Comma-separated allowed frontend origins
-  PassengerEnvVar CLIENT_ORIGIN "https://uniserve.nicecafe.net,https://www.uniserve.nicecafe.net"
+  PassengerEnvVar CLIENT_ORIGIN "https://hikma.etcodex.com,https://www.hikma.etcodex.com"
 </IfModule>
 Options -Indexes -MultiViews
 # Serve static assets (like images) efficiently if they exist in the document root.
@@ -23,8 +24,8 @@ Options -Indexes -MultiViews
 # because the error page has no CORS headers. These headers make error responses readable by the browser.
 <IfModule mod_setenvif.c>
   # Only allow your known frontend origins (no wildcard when credentials are used).
-  SetEnvIfNoCase Origin "^https://uniserve\.nicecafe\.net$" ACAO=$0
-  SetEnvIfNoCase Origin "^https://www\.uniserve\.nicecafe\.net$" ACAO=$0
+  SetEnvIfNoCase Origin "^https://hikma\.etcodex\.com$" ACAO=$0
+  SetEnvIfNoCase Origin "^https://www\.hikma\.etcodex\.com$" ACAO=$0
 </IfModule>
 <IfModule mod_headers.c>
   # Apply even on error responses (503/404) so the browser can read the real status.
