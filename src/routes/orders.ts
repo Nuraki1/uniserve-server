@@ -91,7 +91,7 @@ async function computeSubBranchStatusesFromOrderItems(items: any[]): Promise<Rec
   if (subBranchMap.size === 0) return null;
   const subBranchStatuses: Record<string, string> = {};
   for (const subBranchId of subBranchMap.keys()) {
-    subBranchStatuses[subBranchId] = "pending";
+    subBranchStatuses[subBranchId] = "preparing";
   }
   return subBranchStatuses;
 }
@@ -104,7 +104,7 @@ function mergeSubBranchStatuses(
   const prev = existing && typeof existing === "object" ? { ...existing } : {};
   const next: Record<string, string> = {};
   for (const k of Object.keys(computed)) {
-    next[k] = typeof prev[k] === "string" ? prev[k] : "pending";
+    next[k] = typeof prev[k] === "string" ? prev[k] : "preparing";
   }
   return next;
 }
@@ -220,7 +220,7 @@ export function createOrdersRouter(io: SocketIOServer) {
       tax,
       discount,
       total,
-      status: "pending",
+      status: "preparing",
     };
 
     // Always include subBranchStatuses, even if null (for proper tracking)
@@ -464,10 +464,11 @@ export function createOrdersRouter(io: SocketIOServer) {
     const isAdmin = authed.role === "admin";
 
     if (!isAdmin) {
-      if (existing.status !== "pending") {
+      const cancellable = existing.status === "pending" || existing.status === "preparing";
+      if (!cancellable) {
         return res.status(409).json({
           success: false,
-          error: "Only pending orders can be removed",
+          error: "Only orders still awaiting kitchen can be removed",
         });
       }
 
