@@ -1,4 +1,4 @@
-name: Deploy API (uniserveapi.nicecafe.net)
+name: Deploy API (uniserveapi.etcodex.com)
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
 
       # cPanel usually requires FTPS (explicit TLS) on port 21 — plain FTP often hangs or times out.
       # If this still fails: confirm in cPanel whether access is FTP/FTPS or SFTP only (SFTP needs a different action).
-      - name: Deploy via FTP (cPanel - uniserveapi.nicecafe.net)
+      - name: Deploy via FTP (cPanel - uniserveapi.etcodex.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         timeout-minutes: 15
         with:

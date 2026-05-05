@@ -48,7 +48,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetUrl: string):
   await transporter.sendMail({
     from,
     to: toEmail,
-    subject: "Reset your Nice Cafe password",
+    subject: "Reset your Hikma Ful Sudani's password",
     text: `You requested a password reset.\n\nOpen this link to choose a new password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
     html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Reset your password</a> (link valid for 1 hour).</p><p>If you did not request this, you can ignore this email.</p>`,
   });
